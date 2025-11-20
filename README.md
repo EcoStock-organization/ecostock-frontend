@@ -17,9 +17,9 @@ Este repositório contém o código-fonte da interface de usuário (Frontend) pa
 
 Este projeto é dividido em múltiplos repositórios. Acesse os outros componentes através dos links abaixo:
 
--   **[📄 Documentação](https://github.com/TPPE-Estoque/Doc)**
--   **[⚙️ Backend](https://github.com/TPPE-Estoque/Backend)**
--   **[🔑 Serviço de Autenticação](https://github.com/TPPE-Estoque/Auth)**
+-   **[📄 Documentação](https://github.com/EcoStock-organization/Doc)**
+-   **[⚙️ Backend](https://github.com/EcoStock-organization/Backend)**
+-   **[🔑 Serviço de Autenticação](https://github.com/EcoStock-organization/Auth)**
 
 ## 🚀 Como Rodar o Projeto
 
@@ -34,7 +34,7 @@ Siga os passos abaixo para executar o ambiente de desenvolvimento localmente.
 
 1.  **Clone o repositório:**
     ```bash
-    git clone https://github.com/TPPE-Estoque/Frontend.git
+    git clone https://github.com/EcoStock-organization/Frontend.git
     ```
 
 2.  **Acesse a pasta do projeto:**
