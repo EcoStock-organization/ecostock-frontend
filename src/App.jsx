@@ -1,30 +1,26 @@
-import React, { useState, useEffect } from 'react'
-import { getHelloWorld } from './services/api'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import RotaPrivada from './routes/RotaPrivada';
+import Login from './pages/Login';
+
+const Dashboard = () => <h1>Bem-vindo ao Dashboard (Logado!)</h1>;
 
 function App() {
-  const [message, setMessage] = useState('Carregando mensagem do backend...')
-
-  useEffect(() => {
-    getHelloWorld()
-      .then(response => {
-        setMessage(response.data.message)
-      })
-      .catch(error => {
-        console.error("Erro ao buscar dados do backend:", error)
-        setMessage('Falha ao conectar com o backend.')
-      })
-  }, [])
-
   return (
-    <div>
-      <header>
-        <h1>Teste de Conexão Frontend-Backend</h1>
-        <p>
-          <strong>Mensagem recebida:</strong> {message}
-        </p>
-      </header>
-    </div>
-  )
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/dashboard" element={
+            <RotaPrivada>
+              <Dashboard />
+            </RotaPrivada>
+          } />
+          <Route path="*" element={<Login />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }
 
-export default App
+export default App;
