@@ -3,14 +3,16 @@ import {
   Container, Typography, Button, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Paper, IconButton, Box, Chip
 } from '@mui/material';
-import { Edit, Delete, Add, Store } from '@mui/icons-material';
+import { Edit, Delete, Add, Store, Inventory } from '@mui/icons-material';
 import { branchService } from '../services/branchService';
+import { useNavigate } from 'react-router-dom';
 import BranchForm from '../components/BranchForm';
 
 export default function Branches() {
   const [branches, setBranches] = useState([]);
   const [openModal, setOpenModal] = useState(false);
   const [currentBranch, setCurrentBranch] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadBranches();
@@ -102,6 +104,13 @@ export default function Branches() {
                   />
                 </TableCell>
                 <TableCell align="right">
+                  <IconButton 
+                    color="secondary" 
+                    onClick={() => navigate(`/filiais/${branch.id}/estoque`)}
+                    title="Gerenciar Estoque"
+                  >
+                    <Inventory />
+                  </IconButton>
                   <IconButton color="primary" onClick={() => handleEdit(branch)}>
                     <Edit />
                   </IconButton>
