@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Products from './pages/Products';
 import Branches from './pages/Branches';
 import BranchStock from './pages/BranchStock';
+import Checkout from './pages/Checkout';
 
 const Dashboard = () => <h1>Bem-vindo ao Dashboard (Logado!)</h1>;
 
@@ -22,6 +23,7 @@ function App() {
           <Route path="/produtos" element={<RotaPrivada><Products /></RotaPrivada>} />
           <Route path="/filiais" element={<RotaPrivada><Branches /></RotaPrivada>} />
           <Route path="/filiais/:id/estoque" element={<RotaPrivada><BranchStock /></RotaPrivada>} />
+          <Route path="/checkout" element={<RotaPrivada><Checkout /></RotaPrivada>} />
           <Route path="*" element={<Login />} />
         </Routes>
       </BrowserRouter>
