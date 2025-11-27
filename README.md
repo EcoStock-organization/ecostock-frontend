@@ -2,16 +2,7 @@
 
 ![Status](https://img.shields.io/badge/status-em--desenvolvimento-yellow)
 
-Este repositório contém o código-fonte da interface de usuário (Frontend) para o projeto de **Gerenciamento de Estoque**. A aplicação é desenvolvida em React e utiliza Vite como ferramenta de build, focando em uma experiência de desenvolvimento moderna e performática.
-
-## ✨ Tecnologias Utilizadas
-
--   **[React](https://react.dev/)**: Biblioteca principal para a construção da interface.
--   **[Vite](https://vitejs.dev/)**: Ferramenta de build e servidor de desenvolvimento rápido.
--   **[JavaScript](https://developer.mozilla.org/pt-BR/docs/Web/JavaScript)**: Linguagem base da aplicação.
--   **[Axios](https://axios-http.com/)**: Para realizar as requisições HTTP para a API do backend.
--   **[React Router](https://reactrouter.com/)**: Para gerenciamento de rotas e navegação entre páginas.
--   **[ESLint](https://eslint.org/)** & **[Prettier](https://prettier.io/)**: Para padronização e qualidade do código.
+Este repositório contém o código-fonte do **Frontend** do sistema **Gerenciador de Estoque**.
 
 ## 🔗 Repositórios do Projeto
 
@@ -21,44 +12,55 @@ Este projeto é dividido em múltiplos repositórios. Acesse os outros component
 -   **[⚙️ Backend](https://github.com/EcoStock-organization/ecostock-backend)**
 -   **[🔑 Serviço de Autenticação](https://github.com/EcoStock-organization/ecostock-auth)**
 
-## 🚀 Como Rodar o Projeto
-
-Siga os passos abaixo para executar o ambiente de desenvolvimento localmente.
+## 🚀 Rodando em Desenvolvimento
 
 ### Pré-requisitos
 
--   **Node.js**: Versão 20.x ou superior.
--   **npm** ou **yarn**.
+- **Node.js** (recomendado 20.x ou superior)
+- **npm** (ou `yarn` / `pnpm`)
 
-### Passos para Instalação
+### Passos
 
-1.  **Clone o repositório:**
-    ```bash
-    git clone https://github.com/EcoStock-organization/ecostock-frontend.git
-    ```
+1. Clone o repositório:
 
-2.  **Acesse a pasta do projeto:**
-    ```bash
-    cd Frontend
-    ```
+```bash
+git clone https://github.com/EcoStock-organization/ecostock-frontend.git
+````
 
-3.  **Instale as dependências:**
-    ```bash
-    npm install
-    ```
+2. Acesse o diretório do frontend:
 
-4.  **Inicie o servidor de desenvolvimento:**
-    ```bash
-    npm run dev
-    ```
+```bash
+cd ecostock-frontend/frontend
+```
 
-Após executar o último comando, a aplicação estará disponível em **[http://localhost:5173](http://localhost:5173)** (ou a porta indicada no seu terminal).
+3. Instale as dependências:
 
-## 📜 Scripts Disponíveis
+```bash
+npm install
+# ou: pnpm install
+```
 
-Neste projeto, você pode executar os seguintes scripts:
+4. Inicie o servidor de desenvolvimento:
 
--   `npm run dev`: Inicia o servidor de desenvolvimento com Hot-Reload.
--   `npm run build`: Gera a versão de produção da aplicação na pasta `dist/`.
--   `npm run lint`: Executa o ESLint para verificar por erros no código.
--   `npm run preview`: Inicia um servidor local para visualizar a versão de produção (após o `build`).
+```bash
+npm run dev
+```
+
+O Next.js geralmente expõe a aplicação em `http://localhost:3000` (confirme no terminal).
+
+## 📜 Scripts úteis (definidos em `package.json`)
+
+- `npm run dev` — Inicia o servidor de desenvolvimento (Next.js).
+- `npm run build` — Compila a aplicação para produção.
+- `npm run start` — Inicia a versão compilada (após `build`).
+- `npm run lint` — Executa o ESLint.
+
+## 🧩 Variáveis de ambiente
+
+- Crie um arquivo `.env.local` com variáveis locais, por exemplo:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+```
+
+Adapte a URL do backend conforme seu ambiente (docker, containers, etc.).
