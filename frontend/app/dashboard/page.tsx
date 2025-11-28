@@ -1,49 +1,47 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { MetricCard } from "@/components/dashboard/metric-card"
 import { StockAlerts } from "@/components/dashboard/stock-alerts"
 import { RecentSales } from "@/components/dashboard/recent-sales"
-import { mockDashboardMetrics, getInventoryWithProducts } from "@/lib/mock-data"
 import { DollarSign, ShoppingCart, Package, Building2, Leaf } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+
+// Novos imports
+import { getDashboardMetrics } from "@/services/dashboard-service"
+import type { DashboardMetrics } from "@/lib/types"
 
 export default function DashboardPage() {
   const { user } = useAuth()
   const isManager = user?.role === "manager"
-  const userBranchId = user?.branchId
+  
+  // Estado para as métricas reais
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  let metrics = mockDashboardMetrics
+  // Buscar dados ao carregar
+  useEffect(() => {
+    getDashboardMetrics()
+      .then(setMetrics)
+      .catch((err) => console.error("Erro ao carregar dashboard:", err))
+      .finally(() => setIsLoading(false))
+  }, [])
 
-  if (isManager && userBranchId) {
-    // Filter inventory data for manager's branch
-    const inventoryData = getInventoryWithProducts()
-    const managerInventory = inventoryData.filter((item) => item.branchId === userBranchId)
-
-    // Calculate manager-specific metrics
-    const totalRevenue = managerInventory.reduce((sum, item) => {
-      return sum + item.currentStock * item.product.unitPrice
-    }, 0)
-
-    const totalSales = managerInventory.reduce((sum, item) => {
-      return sum + item.currentStock
-    }, 0)
-
-    const lowStockItems = managerInventory.filter((item) => item.currentStock <= item.product.minStock).length
-
-    metrics = {
-      totalRevenue,
-      totalSales,
-      lowStockItems,
-      activeBranches: 1,
-      revenueGrowth: 12.5,
-      salesGrowth: 7.2,
-    }
+  // Valores padrão ou de loading
+  const displayMetrics = metrics || {
+    totalRevenue: 0,
+    totalSales: 0,
+    lowStockItems: 0,
+    activeBranches: 0,
+    revenueGrowth: 0,
+    salesGrowth: 0
   }
 
   return (
     <DashboardLayout>
       <div className="space-y-8 animate-fade-in">
+        {/* Header de Boas-vindas */}
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-2xl bg-brand/10 animate-leaf-float">
@@ -51,32 +49,46 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className="text-4xl font-bold text-foreground font-display tracking-tight">
-                {user?.name?.split(" ")[0] || "Usuário"}
+                Olá, {user?.name?.split(" ")[0] || "Usuário"}
               </h1>
-              <p className="text-muted-foreground text-sm font-medium mt-1">Gestão sustentável de estoques</p>
+              <p className="text-muted-foreground text-sm font-medium mt-1">
+                Visão geral do seu negócio em tempo real
+              </p>
             </div>
           </div>
         </div>
 
-        <div
-          className={`grid gap-6 ${isManager ? "md:grid-cols-3 lg:max-w-2xl mx-auto" : "md:grid-cols-2 lg:grid-cols-4"} animate-slide-up`}
-        >
+        {/* Cards de Métricas */}
+        <div className={`grid gap-6 ${isManager ? "md:grid-cols-3 lg:max-w-2xl mx-auto" : "md:grid-cols-2 lg:grid-cols-4"} animate-slide-up`}>
+          
           <MetricCard
-            title="Receita"
-            value={`R$ ${metrics.totalRevenue.toLocaleString("pt-BR", {
-              minimumFractionDigits: 2,
-            })}`}
-            change={metrics.revenueGrowth}
+            title="Receita Total"
+            value={isLoading ? "..." : `R$ ${displayMetrics.totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+            change={displayMetrics.revenueGrowth}
             icon={DollarSign}
           />
+          
           <MetricCard
-            title="Vendas"
-            value={metrics.totalSales.toLocaleString("pt-BR")}
-            change={metrics.salesGrowth}
+            title="Vendas Realizadas"
+            value={isLoading ? "..." : displayMetrics.totalSales.toLocaleString("pt-BR")}
+            change={displayMetrics.salesGrowth}
             icon={ShoppingCart}
           />
-          <MetricCard title="Atenção" value={metrics.lowStockItems} icon={Package} variant="warning" />
-          {!isManager && <MetricCard title="Filiais" value={metrics.activeBranches} icon={Building2} />}
+          
+          <MetricCard 
+            title="Estoque Baixo" 
+            value={isLoading ? "..." : displayMetrics.lowStockItems} 
+            icon={Package} 
+            variant={displayMetrics.lowStockItems > 0 ? "warning" : "default"} 
+          />
+          
+          {!isManager && (
+            <MetricCard 
+                title="Filiais Ativas" 
+                value={isLoading ? "..." : displayMetrics.activeBranches} 
+                icon={Building2} 
+            />
+          )}
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2">

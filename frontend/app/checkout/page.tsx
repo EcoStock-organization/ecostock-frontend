@@ -146,10 +146,35 @@ export default function CheckoutPage() {
     }
   }
   
-  // Nota: Remover item e atualizar quantidade exigiria endpoints de DELETE/PATCH no ItemVenda
-  // Se o backend não tiver, deixe essas funções apenas visuais ou bloqueadas por enquanto.
-  const updateQuantity = (productId: string, quantity: number) => {
-      toast({ title: "Aviso", description: "Edição de quantidade não implementada nesta versão." })
+  const updateQuantity = async (productId: string, newQuantity: number) => {
+    // Encontra o item no carrinho atual
+    const currentItem = cartItems.find(item => item.productId === productId)
+    if (!currentItem || !currentSaleId) return
+
+    const diff = newQuantity - currentItem.quantity
+
+    if (diff > 0) {
+      // Se aumentou, chama o endpoint de adicionar (que já temos)
+      try {
+        await addItemToSale(currentSaleId, Number(productId), diff)
+        
+        // Atualiza visualmente
+        setCartItems(prev => prev.map(item => 
+          item.productId === productId 
+            ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.unitPrice }
+            : item
+        ))
+      } catch (error) {
+        toast({ title: "Erro ao adicionar", description: "Estoque insuficiente ou erro no servidor.", variant: "destructive" })
+      }
+    } else {
+      // Se diminuiu, avisamos que a remoção ainda não tem endpoint (ou precisaríamos criar endpoint de remover)
+      toast({ 
+        title: "Ação não permitida", 
+        description: "Para diminuir a quantidade, remova o item e adicione novamente (limitação da API atual).",
+        variant: "warning"
+      })
+    }
   }
   const removeItem = (productId: string) => {
       toast({ title: "Aviso", description: "Remoção de item não implementada nesta versão." })

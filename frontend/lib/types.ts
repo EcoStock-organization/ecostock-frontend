@@ -70,12 +70,12 @@ export interface InventoryFormData {
   quantidade_minima_estoque: string;
 }
 
-// === VENDAS (Correção de snake_case) ===
+// === VENDAS ===
 
 export interface SaleItem {
   id: number;
-  produto_id: number;
-  produto_nome?: string; // O backend pode mandar o nome para facilitar
+  produto: number;
+  produto_nome?: string;
   quantidade_vendida: number;
   preco_vendido: number;
 }
@@ -84,11 +84,12 @@ export interface Sale {
   id: number;
   filial: number;
   usuario_id: number;
-  data_venda: string; // ISO Date String
+  data_venda: string;
   status: "ABERTA" | "FINALIZADA" | "CANCELADA";
-  forma_pagamento: string | null; // "DINHEIRO", "CARTAO", "PIX"
+  forma_pagamento: string | null;
   valor_total: number;
-  itens_venda: SaleItem[]; // Lista de itens
+  itens_venda: SaleItem[]; // Mantém para retrocompatibilidade se necessário
+  itens?: SaleItem[];      // Adiciona o campo que o serializer VendaSerializer envia
 }
 
 // === FRONTEND ONLY (Carrinho) ===

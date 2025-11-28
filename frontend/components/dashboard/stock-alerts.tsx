@@ -1,104 +1,60 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle, Clock, Package } from "lucide-react"
-import { mockStockAlerts } from "@/lib/mock-data"
-import { cn } from "@/lib/utils"
-import { useAuth } from "@/contexts/auth-context"
+import { AlertTriangle, Package, Loader2 } from "lucide-react"
+import { getStockAlerts } from "@/services/dashboard-service"
+import type { InventoryItem } from "@/lib/types"
 
 export function StockAlerts() {
-  const { user } = useAuth()
-  const isManager = user?.role === "manager"
-  const userBranchId = user?.branchId
+  const [alerts, setAlerts] = useState<InventoryItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const filteredAlerts = isManager
-    ? mockStockAlerts.filter((alert) => alert.branchId === userBranchId)
-    : mockStockAlerts
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "high":
-        return "destructive"
-      case "medium":
-        return "default"
-      case "low":
-        return "secondary"
-      default:
-        return "default"
-    }
-  }
-
-  const getSeverityIcon = (type: string) => {
-    switch (type) {
-      case "low_stock":
-      case "out_of_stock":
-        return Package
-      case "expiring_soon":
-        return Clock
-      default:
-        return AlertTriangle
-    }
-  }
-
-  const getSeverityBorderColor = (severity: string) => {
-    switch (severity) {
-      case "high":
-        return "border-l-status-critical" // Vermelho-terra
-      case "medium":
-        return "border-l-status-warning" // Amarelo-oliva
-      case "low":
-        return "border-l-status-success" // Verde escuro
-      default:
-        return "border-l-border"
-    }
-  }
+  useEffect(() => {
+    getStockAlerts()
+      .then(setAlerts)
+      .catch((err) => console.error("Erro ao buscar alertas:", err))
+      .finally(() => setIsLoading(false))
+  }, [])
 
   return (
-    <Card
-      className={cn(
-        "transition-organic hover-lift shadow-md border-2 border-border/60 bg-gradient-to-br from-card to-card/95",
-      )}
-    >
+    <Card className="transition-organic hover-lift shadow-md border-2 border-border/60">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-foreground font-display font-bold">
-          <AlertTriangle className="h-5 w-5 text-primary" />
+        <CardTitle className="flex items-center gap-2 font-bold">
+          <AlertTriangle className="h-5 w-5 text-destructive" />
           Alertas de Estoque
         </CardTitle>
-        <CardDescription className="text-muted-foreground font-medium">
-          Produtos que precisam de atenção
-        </CardDescription>
+        <CardDescription>Produtos com estoque baixo ou crítico</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {filteredAlerts.length === 0 ? (
-          <p className="text-sm text-muted-foreground font-medium">Nenhum alerta no momento</p>
+        {isLoading ? (
+             <div className="flex justify-center py-4">
+               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+        ) : alerts.length === 0 ? (
+          <div className="text-center py-4 text-muted-foreground">
+            <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>Estoque saudável! Nenhum alerta.</p>
+          </div>
         ) : (
-          filteredAlerts.map((alert) => {
-            const Icon = getSeverityIcon(alert.type)
-            return (
-              <Alert
-                key={alert.id}
-                className={cn(
-                  "border-l-[6px] transition-organic hover:shadow-lg animate-slide-up rounded-xl border-2 border-border/40",
-                  getSeverityBorderColor(alert.severity),
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                <div className="flex items-start justify-between">
-                  <AlertDescription className="flex-1 text-foreground font-medium">{alert.message}</AlertDescription>
-                  <Badge
-                    variant={getSeverityColor(alert.severity)}
-                    className="ml-2 transition-organic rounded-full shadow-sm font-semibold"
-                  >
-                    {alert.severity === "high" && "Alto"}
-                    {alert.severity === "medium" && "Médio"}
-                    {alert.severity === "low" && "Baixo"}
-                  </Badge>
-                </div>
-              </Alert>
-            )
-          })
+          alerts.map((item) => (
+            <Alert key={item.id} className="border-l-[6px] border-l-status-warning rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <div className="flex items-start justify-between w-full">
+                <AlertDescription className="text-foreground font-medium">
+                  {item.produto.nome} está acabando 
+                  <span className="block text-xs font-normal text-muted-foreground mt-1">
+                    Atual: {item.quantidade_atual} un
+                  </span>
+                </AlertDescription>
+                <Badge variant="outline" className="ml-2 border-warning text-warning whitespace-nowrap">
+                  Mín: {item.quantidade_minima_estoque}
+                </Badge>
+              </div>
+            </Alert>
+          ))
         )}
       </CardContent>
     </Card>
