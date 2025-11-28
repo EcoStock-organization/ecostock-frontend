@@ -32,10 +32,8 @@ export function PaymentModal({ isOpen, onClose, items, total, onConfirmSale }: P
 
     setIsProcessing(true)
 
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    onConfirmSale(paymentMethod, paymentMethod === "cash" ? Number.parseFloat(amountPaid) : undefined)
+    const paidAmount = paymentMethod === "cash" ? Number.parseFloat(amountPaid) : undefined
+    await onConfirmSale(paymentMethod, paidAmount)
     setIsProcessing(false)
     onClose()
   }

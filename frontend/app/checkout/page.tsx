@@ -112,7 +112,7 @@ export default function CheckoutPage() {
   }
 
   // 4. Finalizar Venda
-  const handleConfirmSale = async (paymentMethod: string, amountPaid?: number) => {
+  const handleConfirmSale = async (paymentMethod: string) => {
     if (!currentSaleId) return
 
     try {

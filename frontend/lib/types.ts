@@ -30,19 +30,21 @@ export interface Branch {
 
 export interface Category {
   id: number;
-  nome: string;
+  nome: string; // DEVE SER 'nome'
   descricao?: string;
 }
 
 export interface Product {
   id: number;
-  codigo_barras: string;
-  nome: string;
+  codigo_barras: string; // DEVE SER 'codigo_barras'
+  nome: string;          // DEVE SER 'nome'
   descricao?: string;
   tipo_produto: "UNITARIO" | "PESAVEL";
   esta_ativo: boolean;
+  
   // Campos de leitura (vindos do serializer)
   categoria_nome?: string;
+  
   // Campos de escrita (para enviar ao backend)
   id_categoria?: number;
   
@@ -50,6 +52,15 @@ export interface Product {
   preco_venda?: number;
   preco_custo?: number;
   estoque_minimo?: number;
+}
+
+// Se o componente ProductSearch usa ProductWithCategory:
+export interface ProductWithCategory extends Product {
+  category?: Category; // Mantenha category
+  // Adicione unitPrice, barcode, name aqui, se o mock ainda precisar:
+  unitPrice?: number;
+  barcode?: string;
+  name?: string;
 }
 
 // === ESTOQUE ===
@@ -129,11 +140,6 @@ export interface StockAlert {
   message: string;
   severity: "low" | "medium" | "high";
   createdAt: Date;
-}
-
-// Tipos de junção (Helpers)
-export interface ProductWithCategory extends Product {
-  category?: Category;
 }
 
 export interface InventoryItemWithProduct extends InventoryItem {
