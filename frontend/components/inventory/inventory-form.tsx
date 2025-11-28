@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -8,172 +8,151 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { mockBranches, getProductsWithCategories, mockInventoryItems, mockProducts } from "@/lib/mock-data"
-import type { InventoryItem, ProductWithCategory } from "@/lib/types"
+import { coreApi } from "@/lib/api"
+import type { InventoryItem, Product } from "@/lib/types"
 
 interface InventoryFormProps {
   isOpen: boolean
   onClose: () => void
-  item?: InventoryItem & { product?: ProductWithCategory }
+  item?: InventoryItem // Se undefined, é criação
+  branchId: string
   onSave: () => void
 }
 
-export function InventoryForm({ isOpen, onClose, item, onSave }: InventoryFormProps) {
-  const products = getProductsWithCategories()
+export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: InventoryFormProps) {
   const { toast } = useToast()
+  const [products, setProducts] = useState<Product[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   const [formData, setFormData] = useState({
-    productId: item?.productId || products[0]?.id || "",
-    branchId: item?.branchId || mockBranches[0]?.id || "",
-    currentStock: item?.currentStock?.toString() || "0",
-    minStock: item?.minStock?.toString() || "0",
-    reservedStock: item?.reservedStock?.toString() || "0",
+    produto_id: "",
+    quantidade_atual: "",
+    preco_venda_atual: "",
+    quantidade_minima_estoque: "",
   })
 
-  const [isSaving, setIsSaving] = useState(false)
+  // 1. Carregar lista de produtos disponíveis para seleção
+  useEffect(() => {
+    if (isOpen && !item) {
+      // Apenas carrega lista completa se for criação
+      coreApi.get("/produtos/").then(res => setProducts(res.data))
+    }
+  }, [isOpen, item])
 
-  const handleChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+  // 2. Preencher formulário na edição
+  useEffect(() => {
+    if (item) {
+      setFormData({
+        produto_id: item.produto.id.toString(),
+        quantidade_atual: item.quantidade_atual.toString(),
+        preco_venda_atual: item.preco_venda_atual.toString(),
+        quantidade_minima_estoque: item.quantidade_minima_estoque.toString(),
+      })
+    } else {
+      setFormData({
+        produto_id: "",
+        quantidade_atual: "0",
+        preco_venda_atual: "0",
+        quantidade_minima_estoque: "10",
+      })
+    }
+  }, [item, isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSaving(true)
+    setIsLoading(true)
 
     try {
-      if (!formData.productId || !formData.branchId) {
-        toast({ title: "Erro", description: "Selecione produto e filial", variant: "destructive" })
-        return
+      const payload = {
+        produto_id: Number(formData.produto_id), // Obrigatório para CREATE
+        quantidade_atual: Number(formData.quantidade_atual),
+        preco_venda_atual: Number(formData.preco_venda_atual),
+        quantidade_minima_estoque: Number(formData.quantidade_minima_estoque)
       }
 
-      // If editing existing item, update it
       if (item) {
-        const idx = mockInventoryItems.findIndex((it) => it.id === item.id)
-        if (idx !== -1) {
-          mockInventoryItems[idx] = {
-            ...mockInventoryItems[idx],
-            productId: formData.productId,
-            branchId: formData.branchId,
-            currentStock: Number.parseInt(formData.currentStock) || 0,
-            reservedStock: Number.parseInt(formData.reservedStock) || 0,
-            minStock: Number.parseInt(formData.minStock) || 0,
-            updatedAt: new Date(),
-          }
-        }
-        toast({ title: "Estoque atualizado", description: "Item de estoque atualizado com sucesso" })
+        // Edição: PATCH /filiais/{id}/estoque/{item_id}/
+        // Nota: O serializer de edição pode não precisar de produto_id, mas o de criação precisa
+        await coreApi.patch(`/filiais/${branchId}/estoque/${item.id}/`, payload)
+        toast({ title: "Sucesso", description: "Estoque atualizado." })
       } else {
-        // create a new inventory item
-        const newItem: InventoryItem = {
-          id: String(Date.now()),
-          productId: formData.productId,
-          branchId: formData.branchId,
-          currentStock: Number.parseInt(formData.currentStock) || 0,
-          reservedStock: Number.parseInt(formData.reservedStock) || 0,
-          minStock: Number.parseInt(formData.minStock) || 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }
-        mockInventoryItems.push(newItem)
-        // ensure product exists (it should since we selected from list). If not, create placeholder
-        if (!mockProducts.find((p) => p.id === formData.productId)) {
-          mockProducts.push({
-            id: formData.productId,
-            name: "Produto",
-            description: "",
-            barcode: "",
-            categoryId: products.find((p) => p.id === formData.productId)?.categoryId || "",
-            unitPrice: 0,
-            costPrice: 0,
-            minStock: Number.parseInt(formData.minStock) || 0,
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          })
-        }
-
-        toast({ title: "Item criado", description: "Item de estoque criado com sucesso" })
+        // Criação: POST /filiais/{id}/estoque/
+        await coreApi.post(`/filiais/${branchId}/estoque/`, payload)
+        toast({ title: "Sucesso", description: "Item adicionado ao estoque." })
       }
-
       onSave()
       onClose()
-    } catch (err) {
-      toast({ title: "Erro", description: "Não foi possível salvar o item", variant: "destructive" })
+    } catch (error: any) {
+      console.error(error)
+      const msg = error.response?.data?.non_field_errors?.[0] || "Erro ao salvar. Verifique se o produto já existe nesta filial."
+      toast({ title: "Erro", description: msg, variant: "destructive" })
     } finally {
-      setIsSaving(false)
+      setIsLoading(false)
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{item ? "Editar Item de Estoque" : "Adicionar Item ao Estoque"}</DialogTitle>
-          <DialogDescription>{item ? "Atualize os dados do item de estoque" : "Preencha os dados para adicionar o item ao estoque"}</DialogDescription>
+          <DialogTitle>{item ? "Editar Estoque" : "Adicionar Produto ao Estoque"}</DialogTitle>
+          <DialogDescription>Defina a quantidade e o preço de venda para esta filial.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Dados do Estoque</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label>Produto</Label>
-                <Select value={formData.productId} onValueChange={(v) => handleChange("productId", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um produto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {!item && (
+                <div>
+                    <Label>Produto</Label>
+                    <Select 
+                        value={formData.produto_id} 
+                        onValueChange={(v) => setFormData(prev => ({...prev, produto_id: v}))}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecione o produto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {products.map(p => (
+                                <SelectItem key={p.id} value={p.id.toString()}>
+                                    {p.nome} ({p.codigo_barras})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
 
-              <div>
-                <Label>Filial</Label>
-                <Select value={formData.branchId} onValueChange={(v) => handleChange("branchId", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma filial" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mockBranches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <Label>Qtd. Atual</Label>
+                    <Input 
+                        type="number" 
+                        value={formData.quantidade_atual} 
+                        onChange={e => setFormData({...formData, quantidade_atual: e.target.value})}
+                    />
+                </div>
+                <div>
+                    <Label>Estoque Mínimo</Label>
+                     <Input 
+                        type="number" 
+                        value={formData.quantidade_minima_estoque} 
+                        onChange={e => setFormData({...formData, quantidade_minima_estoque: e.target.value})}
+                    />
+                </div>
+            </div>
 
-              <div>
-                <Label>Estoque Atual</Label>
-                <Input type="number" value={formData.currentStock} onChange={(e) => handleChange("currentStock", e.target.value)} />
-              </div>
+            <div>
+                <Label>Preço de Venda (R$)</Label>
+                <Input 
+                    type="number" step="0.01"
+                    value={formData.preco_venda_atual} 
+                    onChange={e => setFormData({...formData, preco_venda_atual: e.target.value})}
+                />
+            </div>
 
-              <div>
-                <Label>Estoque Mínimo</Label>
-                <Input type="number" value={formData.minStock} onChange={(e) => handleChange("minStock", e.target.value)} />
-              </div>
-
-              <div>
-                <Label>Estoque Reservado</Label>
-                <Input type="number" value={formData.reservedStock} onChange={(e) => handleChange("reservedStock", e.target.value)} />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" type="button" onClick={onClose} disabled={isSaving}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Salvando..." : item ? "Atualizar" : "Adicionar"}
-            </Button>
-          </div>
+            <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" type="button" onClick={onClose}>Cancelar</Button>
+                <Button type="submit" disabled={isLoading}>Salvar</Button>
+            </div>
         </form>
       </DialogContent>
     </Dialog>

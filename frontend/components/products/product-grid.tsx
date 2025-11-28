@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,71 +8,96 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ProductForm } from "./product-form"
 import { Search, Plus, Edit, Trash2, Package } from "lucide-react"
-import { getProductsWithCategories, mockCategories } from "@/lib/mock-data"
-import type { ProductWithCategory, Product } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
+import { coreApi } from "@/lib/api" // Importando a API real
+import type { Product, Category } from "@/lib/types"
 
 export function ProductGrid() {
-  const [products, setProducts] = useState<ProductWithCategory[]>(getProductsWithCategories())
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<ProductWithCategory | undefined>()
+  const [editingProduct, setEditingProduct] = useState<Product | undefined>()
 
   const { toast } = useToast()
 
+  // Função para buscar dados reais
+  const fetchData = async () => {
+    setIsLoading(true)
+    try {
+      const [productsRes, categoriesRes] = await Promise.all([
+        coreApi.get("/produtos/"),
+        coreApi.get("/produtos/categorias/")
+      ])
+      setProducts(productsRes.data)
+      setCategories(categoriesRes.data)
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar a lista de produtos.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Carregar ao montar
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  // Filtragem no Front (pode ser movida para o back se a lista for muito grande)
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.barcode.includes(searchTerm) ||
-      product.category.name.toLowerCase().includes(searchTerm.toLowerCase())
+      product.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.codigo_barras.includes(searchTerm) ||
+      (product.categoria_nome && product.categoria_nome.toLowerCase().includes(searchTerm.toLowerCase()))
 
-    const matchesCategory = selectedCategory === "all" || product.categoryId === selectedCategory
+    const matchesCategory = selectedCategory === "all" || 
+      (product.id_categoria && product.id_categoria.toString() === selectedCategory) ||
+      (product.categoria_nome === selectedCategory) // Fallback caso id_categoria não venha na listagem
 
     return matchesSearch && matchesCategory
   })
 
-  const handleSaveProduct = (productData: Partial<Product>) => {
-    if (editingProduct) {
-      // Update existing product
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === editingProduct.id
-            ? {
-                ...p,
-                ...productData,
-                category: mockCategories.find((c) => c.id === productData.categoryId) || p.category,
-              }
-            : p,
-        ),
-      )
-    } else {
-      // Create new product
-      const newProduct: ProductWithCategory = {
-        id: Date.now().toString(),
-        ...productData,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        category: mockCategories.find((c) => c.id === productData.categoryId)!,
-      } as ProductWithCategory
-
-      setProducts((prev) => [newProduct, ...prev])
-    }
-
+  const handleSaveProduct = () => {
+    // Recarrega os dados para garantir sincronia
+    fetchData()
     setEditingProduct(undefined)
+    setIsFormOpen(false)
   }
 
-  const handleEditProduct = (product: ProductWithCategory) => {
+  const handleEditProduct = (product: Product) => {
     setEditingProduct(product)
     setIsFormOpen(true)
   }
 
-  const handleDeleteProduct = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId))
-    toast({
-      title: "Produto removido",
-      description: "O produto foi removido do catálogo",
-    })
+  const handleDeleteProduct = async (productId: number) => {
+    if(!confirm("Tem certeza que deseja remover este produto?")) return;
+
+    try {
+      await coreApi.delete(`/produtos/${productId}/`)
+      
+      // Atualiza a lista localmente
+      setProducts((prev) => prev.filter((p) => p.id !== productId))
+      
+      toast({
+        title: "Produto removido",
+        description: "O produto foi removido do catálogo com sucesso.",
+      })
+    } catch (error) {
+      console.error("Erro ao deletar:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível remover o produto. Verifique se ele possui vínculo com estoque ou vendas.",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleNewProduct = () => {
@@ -105,7 +130,7 @@ export function ProductGrid() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar produtos..."
+                  placeholder="Buscar por nome ou código de barras..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -118,9 +143,9 @@ export function ProductGrid() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas as Categorias</SelectItem>
-                {mockCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id.toString()}>
+                    {category.nome}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -129,8 +154,12 @@ export function ProductGrid() {
         </CardContent>
       </Card>
 
-      {/* Product Grid */}
-      {filteredProducts.length === 0 ? (
+      {/* Grid de Produtos */}
+      {isLoading ? (
+        <div className="flex justify-center py-12">
+             <p className="text-muted-foreground">Carregando produtos...</p>
+        </div>
+      ) : filteredProducts.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -153,8 +182,8 @@ export function ProductGrid() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
-                    <CardTitle className="text-lg line-clamp-2">{product.name}</CardTitle>
-                    <Badge variant="outline">{product.category.name}</Badge>
+                    <CardTitle className="text-lg line-clamp-2">{product.nome}</CardTitle>
+                    <Badge variant="outline">{product.categoria_nome || "Sem Categoria"}</Badge>
                   </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="sm" onClick={() => handleEditProduct(product)}>
@@ -175,39 +204,28 @@ export function ProductGrid() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Código:</span>
-                    <span className="font-mono">{product.barcode}</span>
+                    <span className="font-mono">{product.codigo_barras}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Preço de Venda:</span>
-                    <span className="font-semibold text-primary">R$ {product.unitPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Preço de Custo:</span>
-                    <span>R$ {product.costPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Estoque Mínimo:</span>
-                    <span>{product.minStock}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Margem:</span>
-                    <span className="text-sm font-medium text-green-600">
-                      {(((product.unitPrice - product.costPrice) / product.costPrice) * 100).toFixed(1)}%
+                  {/* Nota: Preços e Estoque geralmente ficam no endpoint de Estoque/Filial, 
+                      mas se o endpoint de produtos retornar, podem ser exibidos aqui. 
+                      Deixei comentado para evitar erro se o campo for undefined */}
+                  {/* <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Preço Venda:</span>
+                    <span className="font-semibold text-primary">
+                        {product.preco_venda ? `R$ ${product.preco_venda}` : '-'}
                     </span>
-                  </div>
+                  </div> 
+                  */}
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
-                  <Badge variant={product.isActive ? "default" : "secondary"}>
-                    {product.isActive ? "Ativo" : "Inativo"}
+                  <Badge variant={product.esta_ativo ? "default" : "secondary"}>
+                    {product.esta_ativo ? "Ativo" : "Inativo"}
                   </Badge>
                 </div>
 
-                {product.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                {product.descricao && (
+                  <p className="text-sm text-muted-foreground line-clamp-2 mt-2">{product.descricao}</p>
                 )}
               </CardContent>
             </Card>
@@ -215,7 +233,7 @@ export function ProductGrid() {
         </div>
       )}
 
-      {/* Product Form Modal */}
+      {/* Modal de Formulário */}
       <ProductForm
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}

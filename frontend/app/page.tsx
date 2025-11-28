@@ -11,13 +11,12 @@ export default function HomePage() {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated && user) {
-        setTimeout(() => {
-          if (user.role === "operator") {
-            router.push("/checkout")
-          } else {
-            router.push("/dashboard")
-          }
-        }, 0)
+        // Verifica a role traduzida
+        if (user.role === "operator") {
+          router.push("/checkout")
+        } else {
+          router.push("/dashboard")
+        }
       } else {
         router.push("/login")
       }

@@ -1,72 +1,113 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Search, Check } from "lucide-react"
-import { mockProducts } from "@/lib/mock-data"
-import type { Product } from "@/lib/types"
+import { useState, useEffect, useMemo } from "react"
+import { Search, Plus, Package } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import type { InventoryItem } from "@/lib/types" // Usamos InventoryItem, pois ele tem o preço e qtd
+import { getBranchStock } from "@/services/stock-service"
 
 interface ProductSearchProps {
-  searchQuery: string
-  setSearchQuery: (query: string) => void
-  onSelectProduct?: (product: Product) => void
+  branchId?: string
+  onAddToCart: (item: InventoryItem, quantity: number) => void
 }
 
-export function ProductSearch({ searchQuery, setSearchQuery, onSelectProduct }: ProductSearchProps) {
+export function ProductSearch({ branchId, onAddToCart }: ProductSearchProps) {
+  const [searchTerm, setSearchTerm] = useState("")
+  const [stockItems, setStockItems] = useState<InventoryItem[]>([])
   const [isOpen, setIsOpen] = useState(false)
 
-  const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return []
-    const query = searchQuery.toLowerCase()
-    return mockProducts
-      .filter((p) => p.name.toLowerCase().includes(query) || (p.barcode && p.barcode.toLowerCase().includes(query)))
-      .slice(0, 8)
-  }, [searchQuery])
-
-  const handleSelectProduct = (product: Product) => {
-    if (onSelectProduct) {
-      onSelectProduct(product)
+  // 1. Carregar estoque da filial ao montar (ou mudar filial)
+  useEffect(() => {
+    if (branchId) {
+      getBranchStock(branchId)
+        .then(setStockItems)
+        .catch(console.error)
     }
-    setSearchQuery("")
+  }, [branchId])
+
+  // 2. Filtragem local (por nome ou código de barras)
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) return []
+    const query = searchTerm.toLowerCase()
+    
+    return stockItems
+      .filter((item) => {
+        // Garante que só mostramos produtos com estoque > 0
+        const hasStock = item.quantidade_atual > 0
+        const matchesName = item.produto.nome.toLowerCase().includes(query)
+        const matchesCode = item.produto.codigo_barras.includes(query)
+        return hasStock && (matchesName || matchesCode)
+      })
+      .slice(0, 10) // Limita resultados
+  }, [searchTerm, stockItems])
+
+  const handleAddItem = (item: InventoryItem) => {
+    onAddToCart(item, 1)
+    setSearchTerm("")
     setIsOpen(false)
   }
 
   return (
-    <div className="relative">
-      <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-        <Search className="w-5 h-5" />
+    <div className="space-y-4 relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar produto (nome ou código)..."
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value)
+            setIsOpen(true)
+          }}
+          onFocus={() => setIsOpen(true)}
+          // Delay para fechar ao clicar fora, permitindo o clique no botão
+          onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+          className="pl-10 text-lg h-12"
+          disabled={!branchId}
+        />
       </div>
-      <input
-        type="text"
-        placeholder="Buscar por código de barras ou nome do produto"
-        value={searchQuery}
-        onChange={(e) => {
-          setSearchQuery(e.target.value)
-          setIsOpen(true)
-        }}
-        onFocus={() => searchQuery && setIsOpen(true)}
-        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
-        className="w-full pl-10 pr-4 py-3 text-lg bg-card border-2 border-status-success/30 rounded-xl text-foreground placeholder-muted-foreground focus:outline-none focus:border-status-success focus:ring-2 focus:ring-status-success transition-all"
-      />
 
-      {isOpen && filteredProducts.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-card border-2 border-status-success/30 rounded-xl shadow-lg z-10 overflow-hidden">
-          {filteredProducts.map((product) => (
-            <button
-              key={product.id}
-              onClick={() => handleSelectProduct(product)}
-              className="w-full px-4 py-3 text-left hover:bg-status-success/10 transition-colors border-b border-status-success/30 last:border-b-0 flex items-center justify-between group"
-            >
-              <div>
-                <p className="font-semibold text-foreground text-sm">{product.name}</p>
-                <p className="text-xs text-muted-foreground">Código: {product.barcode}</p>
+      {isOpen && filteredItems.length > 0 && (
+        <Card className="absolute w-full z-50 max-h-96 overflow-y-auto shadow-xl border-primary/20">
+          <CardContent className="p-0">
+            {filteredItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-4 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium text-foreground">{item.produto.nome}</h3>
+                    {item.produto.categoria_nome && (
+                      <Badge variant="outline" className="text-xs">
+                        {item.produto.categoria_nome}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-4 text-sm">
+                     <span className="text-muted-foreground font-mono">
+                        {item.produto.codigo_barras}
+                     </span>
+                     <span className={`font-medium ${item.quantidade_atual < 10 ? 'text-orange-500' : 'text-green-600'}`}>
+                        Estoque: {item.quantidade_atual}
+                     </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                    <p className="text-lg font-bold text-primary">
+                        R$ {Number(item.preco_venda_atual).toFixed(2)}
+                    </p>
+                    <Button onClick={() => handleAddItem(item)} size="sm">
+                        <Plus className="h-4 w-4 mr-1" /> Adicionar
+                    </Button>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-bold text-status-success">R$ {product.unitPrice.toFixed(2)}</p>
-                <Check className="w-4 h-4 text-status-success opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </button>
-          ))}
-        </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
     </div>
   )

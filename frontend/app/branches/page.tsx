@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { BranchCard } from "@/components/branches/branch-card"
 import { BranchForm } from "@/components/branches/branch-form"
@@ -11,11 +11,14 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Plus, Search, Building2 } from "lucide-react"
-import { mockBranches } from "@/lib/mock-data"
-import type { Branch } from "@/lib/types"
+import { coreApi } from "@/lib/api"
+import type { Branch, User } from "@/lib/types"
 
 export default function BranchesPage() {
-  const [branches, setBranches] = useState<Branch[]>(mockBranches)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -23,46 +26,51 @@ export default function BranchesPage() {
 
   const { toast } = useToast()
 
+  // 1. Buscar Dados Reais (Filiais e Usuários)
+  const fetchData = async () => {
+    setIsLoading(true)
+    try {
+      const [branchesRes, usersRes] = await Promise.all([
+        coreApi.get("/filiais/"),
+        coreApi.get("/usuarios/") 
+      ])
+      setBranches(branchesRes.data)
+      setUsers(usersRes.data)
+    } catch (error) {
+      console.error("Erro ao buscar dados:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar as filiais.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  // Filtro no Cliente
   const filteredBranches = branches.filter((branch) => {
     const matchesSearch =
-      branch.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      branch.address.toLowerCase().includes(searchTerm.toLowerCase())
+      branch.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      branch.logradouro.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      branch.cidade.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus =
       statusFilter === "all" ||
-      (statusFilter === "active" && branch.isActive) ||
-      (statusFilter === "inactive" && !branch.isActive)
+      (statusFilter === "active" && branch.esta_ativa) ||
+      (statusFilter === "inactive" && !branch.esta_ativa)
 
     return matchesSearch && matchesStatus
   })
 
-  const handleSaveBranch = (branchData: Partial<Branch>) => {
-    if (editingBranch) {
-      // Update existing branch
-      setBranches((prev) =>
-        prev.map((b) =>
-          b.id === editingBranch.id
-            ? {
-                ...b,
-                ...branchData,
-                updatedAt: new Date(),
-              }
-            : b,
-        ),
-      )
-    } else {
-      // Create new branch
-      const newBranch: Branch = {
-        id: Date.now().toString(),
-        ...branchData,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      } as Branch
-
-      setBranches((prev) => [newBranch, ...prev])
-    }
-
+  const handleSaveBranch = () => {
+    fetchData() // Recarrega dados do servidor
     setEditingBranch(undefined)
+    setIsFormOpen(false)
   }
 
   const handleEditBranch = (branch: Branch) => {
@@ -70,12 +78,23 @@ export default function BranchesPage() {
     setIsFormOpen(true)
   }
 
-  const handleDeleteBranch = (branchId: string) => {
-    setBranches((prev) => prev.filter((b) => b.id !== branchId))
-    toast({
-      title: "Filial removida",
-      description: "A filial foi removida do sistema",
-    })
+  const handleDeleteBranch = async (branchId: number) => {
+    if (!confirm("Tem certeza que deseja excluir esta filial?")) return
+
+    try {
+      await coreApi.delete(`/filiais/${branchId}/`)
+      setBranches((prev) => prev.filter((b) => b.id !== branchId))
+      toast({
+        title: "Filial removida",
+        description: "A filial foi removida do sistema",
+      })
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao excluir filial.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleNewBranch = () => {
@@ -86,16 +105,13 @@ export default function BranchesPage() {
   return (
     <DashboardLayout requiredRole="admin">
       <div className="p-6 space-y-6">
-        {/* Header */}
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-foreground">Gestão de Filiais</h1>
           <p className="text-muted-foreground">Gerencie filiais, gerentes e configurações</p>
         </div>
 
-        {/* Stats */}
         <BranchStats />
 
-        {/* Filters and Actions */}
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -139,8 +155,9 @@ export default function BranchesPage() {
           </CardContent>
         </Card>
 
-        {/* Branch Grid */}
-        {filteredBranches.length === 0 ? (
+        {isLoading ? (
+            <div className="text-center py-12">Carregando filiais...</div>
+        ) : filteredBranches.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
               <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -159,17 +176,23 @@ export default function BranchesPage() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredBranches.map((branch) => (
-              <BranchCard key={branch.id} branch={branch} onEdit={handleEditBranch} onDelete={handleDeleteBranch} />
+              <BranchCard 
+                key={branch.id} 
+                branch={branch} 
+                users={users}
+                onEdit={handleEditBranch} 
+                onDelete={handleDeleteBranch} 
+              />
             ))}
           </div>
         )}
 
-        {/* Branch Form Modal */}
         <BranchForm
           isOpen={isFormOpen}
           onClose={() => setIsFormOpen(false)}
           branch={editingBranch}
           onSave={handleSaveBranch}
+          users={users}
         />
       </div>
     </DashboardLayout>

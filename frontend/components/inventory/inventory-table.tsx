@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,312 +8,249 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Search, Filter, Plus, Edit, AlertTriangle, CheckCircle2, AlertCircle, Package2 } from "lucide-react"
-import { getInventoryWithProducts, mockBranches } from "@/lib/mock-data"
 import { InventoryForm } from "./inventory-form"
-import type { InventoryItemWithProduct } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
+import { coreApi } from "@/lib/api"
+import type { InventoryItem, Branch } from "@/lib/types"
 
 export function InventoryTable() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedBranch, setSelectedBranch] = useState<string>("all")
-  const [stockFilter, setStockFilter] = useState<string>("all")
-  const [isUpdating, setIsUpdating] = useState<string | null>(null)
-  const { toast } = useToast()
   const { user } = useAuth()
-
+  const { toast } = useToast()
   const isManager = user?.role === "manager"
-  const userBranchId = user?.branchId
 
-  const inventoryData = getInventoryWithProducts()
-  const [refreshKey, setRefreshKey] = useState(0)
+  // Estados de Dados
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
+  
+  // Estados de Controle
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [editingItem, setEditingItem] = useState<InventoryItemWithProduct | null>(null)
-  const triggerRefresh = () => setRefreshKey((k) => k + 1)
+  const [editingItem, setEditingItem] = useState<InventoryItem | undefined>()
 
-  const filteredData = inventoryData.filter((item) => {
+  // 1. Carregar Filiais (apenas se Admin, se Manager usa a do user)
+  useEffect(() => {
+    const loadBranches = async () => {
+      if (isManager && user?.branchId) {
+        setSelectedBranchId(user.branchId.toString())
+      } else {
+        try {
+          const res = await coreApi.get("/filiais/")
+          setBranches(res.data)
+          // Seleciona a primeira filial por padrão se houver
+          if (res.data.length > 0) {
+            setSelectedBranchId(res.data[0].id.toString())
+          }
+        } catch (error) {
+          console.error("Erro ao carregar filiais", error)
+        }
+      }
+    }
+    loadBranches()
+  }, [isManager, user])
+
+  // 2. Carregar Estoque (depende da filial selecionada)
+  const fetchInventory = useCallback(async () => {
+    if (!selectedBranchId) return
+
+    setIsLoading(true)
+    try {
+      // Endpoint aninhado: /api/filiais/{id}/estoque/
+      const res = await coreApi.get(`/filiais/${selectedBranchId}/estoque/`)
+      setInventory(res.data)
+    } catch (error) {
+      console.error("Erro ao carregar estoque", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar o estoque desta filial.",
+        variant: "destructive"
+      })
+      setInventory([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [selectedBranchId, toast])
+
+  useEffect(() => {
+    fetchInventory()
+  }, [fetchInventory])
+
+  // Filtragem Local
+  const filteredData = inventory.filter((item) => {
     const matchesSearch =
-      item.product.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.product.barcode.includes(searchTerm)
-
-    const matchesBranch = isManager
-      ? item.branchId === userBranchId
-      : selectedBranch === "all" || item.branchId === selectedBranch
-
-    const matchesStock =
-      stockFilter === "all" ||
-      (stockFilter === "low" && item.currentStock <= item.product.minStock) ||
-      (stockFilter === "out" && item.currentStock === 0) ||
-      (stockFilter === "normal" && item.currentStock > item.product.minStock)
-
-    return matchesSearch && matchesBranch && matchesStock
+      item.produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      item.produto.codigo_barras.includes(searchTerm)
+    return matchesSearch
   })
 
-  const getStockStatus = (item: InventoryItemWithProduct) => {
-    if (item.currentStock === 0) {
+  const getStockStatus = (item: InventoryItem) => {
+    if (item.quantidade_atual === 0) {
       return {
         label: "Sem Estoque",
         icon: AlertTriangle,
-        className: "bg-status-critical text-status-critical-foreground border-status-critical",
+        className: "bg-destructive/10 text-destructive border-destructive/20",
         severity: "high",
       }
     }
-    if (item.currentStock <= item.product.minStock) {
+    if (item.quantidade_atual <= item.quantidade_minima_estoque) {
       return {
-        label: "Estoque Baixo",
+        label: "Baixo",
         icon: AlertCircle,
-        className: "bg-status-warning text-status-warning-foreground border-status-warning",
+        className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
         severity: "medium",
       }
     }
     return {
       label: "Normal",
       icon: CheckCircle2,
-      className: "bg-status-success text-status-success-foreground border-status-success",
+      className: "bg-green-500/10 text-green-600 border-green-500/20",
       severity: "low",
     }
   }
 
-  const handleUpdateStock = async (itemId: string, itemName: string) => {
-    setIsUpdating(itemId)
+  const handleEdit = (item: InventoryItem) => {
+    setEditingItem(item)
+    setIsFormOpen(true)
+  }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    setIsUpdating(null)
-    toast({
-      title: "Estoque atualizado",
-      description: `${itemName} foi atualizado com sucesso.`,
-      duration: 3000,
-    })
+  const handleDelete = async (itemId: number) => {
+    if (!confirm("Remover este item do estoque?")) return
+    try {
+        // Endpoint de detalhe: /filiais/{id_filial}/estoque/{id_item}/
+        await coreApi.delete(`/filiais/${selectedBranchId}/estoque/${itemId}/`)
+        setInventory(prev => prev.filter(i => i.id !== itemId))
+        toast({ title: "Item removido" })
+    } catch (error) {
+        toast({ title: "Erro ao remover", variant: "destructive" })
+    }
   }
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
-      <Card className="transition-smooth hover:shadow-lg">
+      {/* Filtros e Seleção de Filial */}
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5 text-primary" />
-            Filtros
+            Filtros & Localização
           </CardTitle>
-          <CardDescription>
-            {isManager ? "Filtre os produtos por nome" : "Filtre os produtos por nome, filial ou status do estoque"}
-          </CardDescription>
+          <CardDescription>Selecione a filial para gerenciar o estoque</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por nome ou código de barras... "
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 transition-smooth focus:ring-2 focus:ring-primary"
-                  aria-label="Buscar produtos"
-                  accessKey="k"
-                />
-              </div>
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar produto..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
             </div>
+
             {!isManager && (
-              <>
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-full sm:w-48 transition-smooth">
-                    <SelectValue placeholder="Selecionar filial" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as Filiais</SelectItem>
-                    {mockBranches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </>
+              <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                <SelectTrigger className="w-full sm:w-64">
+                  <SelectValue placeholder="Selecione a Filial" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id.toString()}>
+                      {b.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
-            <Select value={stockFilter} onValueChange={setStockFilter}>
-              <SelectTrigger className="w-full sm:w-48 transition-smooth">
-                <SelectValue placeholder="Status do estoque" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Status</SelectItem>
-                <SelectItem value="normal">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-status-success" />
-                    Estoque Normal
-                  </div>
-                </SelectItem>
-                <SelectItem value="low">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-status-warning" />
-                    Estoque Baixo
-                  </div>
-                </SelectItem>
-                <SelectItem value="out">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-status-critical" />
-                    Sem Estoque
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Inventory Table */}
-      <Card className="transition-smooth hover:shadow-lg">
+      {/* Tabela */}
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Package2 className="h-5 w-5 text-primary" />
-              Controle de Estoque
+              Itens em Estoque
             </CardTitle>
             <CardDescription>
-              {filteredData.length} {filteredData.length === 1 ? "produto encontrado" : "produtos encontrados"}
+              {filteredData.length} itens listados na filial selecionada
             </CardDescription>
           </div>
-          <Button
-            className="flex items-center gap-2 transition-smooth hover:scale-105"
-            onClick={() => {
-              setEditingItem(null)
-              setIsFormOpen(true)
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            Adicionar Produto
+          <Button onClick={() => { setEditingItem(undefined); setIsFormOpen(true); }} disabled={!selectedBranchId}>
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar Item
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Produto</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  {!isManager && <TableHead>Filial</TableHead>}
-                  <TableHead className="text-center">Estoque Atual</TableHead>
-                  <TableHead className="text-center">Estoque Mínimo</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Preço</TableHead>
-                  <TableHead className="text-center">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredData.length === 0 ? (
+          {isLoading ? (
+             <div className="text-center py-8">Carregando estoque...</div>
+          ) : !selectedBranchId ? (
+             <div className="text-center py-8 text-muted-foreground">Selecione uma filial para ver o estoque.</div>
+          ) : filteredData.length === 0 ? (
+             <div className="text-center py-8 text-muted-foreground">Estoque vazio nesta filial.</div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={isManager ? 7 : 8} className="text-center py-8 text-muted-foreground">
-                      Nenhum produto encontrado com os filtros aplicados
-                    </TableCell>
+                    <TableHead>Produto</TableHead>
+                    <TableHead className="text-center">Qtd. Atual</TableHead>
+                    <TableHead className="text-center">Mínimo</TableHead>
+                    <TableHead className="text-center">Preço Venda</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
-                ) : (
-                  filteredData.map((item) => {
+                </TableHeader>
+                <TableBody>
+                  {filteredData.map((item) => {
                     const status = getStockStatus(item)
                     const StatusIcon = status.icon
-                    
-
                     return (
-                      <TableRow key={item.id} className="transition-smooth hover:bg-muted/50">
+                      <TableRow key={item.id}>
                         <TableCell>
-                          <div className="space-y-1">
-                            <p className="font-medium text-foreground">{item.product.name}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{item.product.barcode}</p>
-                          </div>
+                          <div className="font-medium">{item.produto.nome}</div>
+                          <div className="text-xs text-muted-foreground">{item.produto.codigo_barras}</div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="transition-smooth">
-                            {item.product.category.name}
-                          </Badge>
-                        </TableCell>
-                        {!isManager && <TableCell className="text-foreground">{item.branch.name}</TableCell>}
+                        <TableCell className="text-center font-bold text-lg">{item.quantidade_atual}</TableCell>
+                        <TableCell className="text-center text-muted-foreground">{item.quantidade_minima_estoque}</TableCell>
+                        <TableCell className="text-center font-medium">R$ {item.preco_venda_atual}</TableCell>
                         <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            {status.severity !== "low" && (
-                              <StatusIcon
-                                className={cn(
-                                  "h-4 w-4",
-                                  status.severity === "high" && "text-status-critical",
-                                  status.severity === "medium" && "text-status-warning",
-                                )}
-                              />
-                            )}
-                            <span
-                              className={cn(
-                                "font-semibold text-lg",
-                                status.severity === "high" && "text-status-critical",
-                                status.severity === "medium" && "text-status-warning",
-                                status.severity === "low" && "text-status-success",
-                              )}
-                            >
-                              {item.currentStock}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center text-muted-foreground">{item.product.minStock}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge className={cn(status.className, "transition-smooth font-medium")}>
-                            <StatusIcon className="h-3 w-3 mr-1" />
+                          <Badge className={cn("gap-1", status.className)} variant="outline">
+                            <StatusIcon className="h-3 w-3" />
                             {status.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-foreground">
-                          R$ {item.product.unitPrice.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-2 min-h-10">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                // open edit form
-                                setEditingItem(item)
-                                setIsFormOpen(true)
-                              }}
-                              className="transition-smooth hover:scale-110 inline-flex"
-                              aria-label={`Editar ${item.product.name}`}
-                            >
-                              <Edit className="h-4 w-4 inline-flex" />
-                            </Button>
-                            {isManager && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="transition-smooth hover:scale-110 bg-status-success/30 text-status-success border-status-success hover:bg-status-success/40 hover:text-status-success-foreground rounded-lg h-8 px-3 text-xs font-medium inline-flex items-center shadow-sm"
-                                aria-label={`Solicitar reposição de ${item.product.name}`}
-                                onClick={() => {
-                                  toast({
-                                    title: "Solicitação de reposição enviada com sucesso!",
-                                    duration: 3000,
-                                  })
-                                }}
-                              >
-                                <Plus className="h-3.5 w-3.5 mr-1.5 inline-flex" />
-                                Solicitar reposição
-                              </Button>
-                            )}
-                          </div>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {/* Deletar item de estoque geralmente não é recomendado se houver vendas, mas deixamos aqui */}
+                          {/* <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(item.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button> */}
                         </TableCell>
                       </TableRow>
                     )
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Inventory Add/Edit Form */}
-      <InventoryForm
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        item={editingItem ?? undefined}
-        onSave={() => {
-          // trigger a refresh to re-read mock data
-          triggerRefresh()
-        }}
+      {/* Modal Form */}
+      <InventoryForm 
+        isOpen={isFormOpen} 
+        onClose={() => setIsFormOpen(false)} 
+        onSave={fetchInventory}
+        branchId={selectedBranchId}
+        item={editingItem}
       />
     </div>
   )
