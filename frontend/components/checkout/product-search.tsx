@@ -1,47 +1,46 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, Plus, Package } from "lucide-react"
+import { Search, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import type { InventoryItem } from "@/lib/types" // Usamos InventoryItem, pois ele tem o preço e qtd
+import type { InventoryItem } from "@/lib/types"
 import { getBranchStock } from "@/services/stock-service"
 
 interface ProductSearchProps {
   branchId?: string
   onAddToCart: (item: InventoryItem, quantity: number) => void
+  lastUpdate?: number // GATILHO DE ATUALIZAÇÃO
 }
 
-export function ProductSearch({ branchId, onAddToCart }: ProductSearchProps) {
+export function ProductSearch({ branchId, onAddToCart, lastUpdate }: ProductSearchProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [stockItems, setStockItems] = useState<InventoryItem[]>([])
   const [isOpen, setIsOpen] = useState(false)
 
-  // 1. Carregar estoque da filial ao montar (ou mudar filial)
+  // Recarrega estoque quando branch muda OU quando lastUpdate muda (venda finalizada)
   useEffect(() => {
     if (branchId) {
       getBranchStock(branchId)
         .then(setStockItems)
         .catch(console.error)
     }
-  }, [branchId])
+  }, [branchId, lastUpdate])
 
-  // 2. Filtragem local (por nome ou código de barras)
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return []
     const query = searchTerm.toLowerCase()
     
     return stockItems
       .filter((item) => {
-        // Garante que só mostramos produtos com estoque > 0
         const hasStock = item.quantidade_atual > 0
         const matchesName = item.produto.nome.toLowerCase().includes(query)
         const matchesCode = item.produto.codigo_barras.includes(query)
         return hasStock && (matchesName || matchesCode)
       })
-      .slice(0, 10) // Limita resultados
+      .slice(0, 10)
   }, [searchTerm, stockItems])
 
   const handleAddItem = (item: InventoryItem) => {
@@ -55,14 +54,13 @@ export function ProductSearch({ branchId, onAddToCart }: ProductSearchProps) {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar produto (nome ou código)..."
+          placeholder="Buscar produto..."
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value)
             setIsOpen(true)
           }}
           onFocus={() => setIsOpen(true)}
-          // Delay para fechar ao clicar fora, permitindo o clique no botão
           onBlur={() => setTimeout(() => setIsOpen(false), 200)}
           className="pl-10 text-lg h-12"
           disabled={!branchId}

@@ -1,47 +1,47 @@
-// frontend/app/sales/page.tsx
 "use client"
 
-import { useState, useEffect, useRef } from "react" // Adicionado useRef, useEffect
+import { useState, useEffect, useRef } from "react"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 import { ProductSearch } from "@/components/sales/product-search"
 import { ShoppingCartComponent, type CartItem } from "@/components/sales/shopping-cart"
 import { PaymentModal } from "@/components/sales/payment-modal"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Receipt, Loader2 } from "lucide-react" // Adicionado Loader2
-import type { ProductWithCategory } from "@/lib/types"
-import { useAuth } from "@/contexts/auth-context" // Adicionado useAuth
-import { createSale, addItemToSale, finalizeSale } from "@/services/sales-service" // Adicionado API Services
+import { Receipt, Loader2 } from "lucide-react"
+import type { ProductWithCategory, SaleItem } from "@/lib/types"
+import { useAuth } from "@/contexts/auth-context"
+import { createSale, addItemToSale, finalizeSale, removeItemFromSale, updateItemQuantityInSale } from "@/services/sales-service"
+
+interface CartItemWithSaleId extends CartItem {
+    saleItemId?: number;
+}
 
 export default function SalesPage() {
   const { user } = useAuth()
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
+  const [cartItems, setCartItems] = useState<CartItemWithSaleId[]>([])
   const [isPaymentModalOpen, setIsPaymentModal] = useState(false)
   const { toast } = useToast()
 
-  // API States
   const [currentSaleId, setCurrentSaleId] = useState<string | null>(null)
   const [isLoadingSale, setIsLoadingSale] = useState(true)
   const initialized = useRef(false) 
 
-  // 1. Init Sale Logic (on mount)
+  // 1. Init Sale Logic
   useEffect(() => {
       const initSale = async () => {
           if (!user?.id || currentSaleId || initialized.current) return
           
-          initialized.current = true // Lock
+          initialized.current = true
           setIsLoadingSale(true)
 
           try {
-              // Esta página é usada por Admins/Gerentes. Usamos o branchId do usuário ou default para 1.
               const branchId = user?.branchId || 1 
-              
               const sale = await createSale(branchId)
               setCurrentSaleId(sale.id)
           } catch (error) {
               console.error("Erro ao iniciar venda:", error)
-              toast({ title: "Erro", description: "Falha ao iniciar sistema de vendas.", variant: "destructive" })
+              toast({ title: "Erro", description: "Falha ao iniciar sistema.", variant: "destructive" })
           } finally {
               setIsLoadingSale(false)
           }
@@ -49,28 +49,23 @@ export default function SalesPage() {
       initSale()
   }, [user, currentSaleId, toast])
   
-  // 2. Add to Cart (API Call)
+  // 2. Add to Cart
   const addToCart = async (product: ProductWithCategory, quantity: number) => {
     if (!currentSaleId) {
         toast({ title: "Aviso", description: "Venda não iniciada.", variant: "destructive" });
         return;
     }
     
-    // O preço de venda vem de 'preco_venda'. Usamos este valor para o cálculo e para a UI.
     const unitPrice = product.preco_venda || 0; 
     
-    // CORREÇÃO: Cria um objeto de produto seguro para o carrinho (ShoppingCartComponent)
     const safeProduct = {
         ...product,
-        // Adicionamos unitPrice ao objeto product para satisfazer o ShoppingCartComponent
         unitPrice: unitPrice 
     }
     
     try {
-        // Esta chamada API adiciona o item e valida o estoque.
-        await addItemToSale(currentSaleId, Number(product.id), quantity)
+        const itemVenda = await addItemToSale(currentSaleId, Number(product.id), quantity) as SaleItem
 
-        // Atualiza UI local
         setCartItems((prev) => {
             const existingIndex = prev.findIndex(i => i.product.id === product.id)
             if (existingIndex >= 0) {
@@ -80,11 +75,11 @@ export default function SalesPage() {
                 return updated
             }
             return [...prev, {
-                // USAMOS safeProduct, que possui unitPrice
                 product: safeProduct, 
                 quantity: quantity,
                 unitPrice: unitPrice,
-                subtotal: quantity * unitPrice
+                subtotal: quantity * unitPrice,
+                saleItemId: itemVenda.id
             }]
         })
         
@@ -96,21 +91,64 @@ export default function SalesPage() {
     }
   }
 
-  // 3. Funções de manipulação local (mantidas como alerta para não complicar o MVP)
-  const updateQuantity = (productId: string, quantity: number) => {
-    toast({ title: "Aviso", description: "Ajuste de quantidade manual não implementado. Use o Checkout.", variant: "warning" });
+  // 3. Update Quantity (IMPLEMENTADO CORRETAMENTE)
+  const updateQuantity = async (productId: string, quantity: number) => {
+    const currentItem = cartItems.find(item => item.product.id === productId)
+    if (!currentItem || !currentSaleId || !currentItem.saleItemId) return
+
+    // Se 0, remove
+    if (quantity === 0) {
+        removeItem(productId)
+        return
+    }
+
+    try {
+        // Chama API PATCH
+        await updateItemQuantityInSale(currentSaleId, currentItem.saleItemId, quantity)
+
+        setCartItems(prev => prev.map(item => {
+            if (item.product.id === productId) {
+                return {
+                    ...item,
+                    quantity,
+                    subtotal: quantity * item.unitPrice
+                }
+            }
+            return item
+        }))
+
+    } catch (err: unknown) {
+        const error = err as { response?: { data?: { detail?: string } } }
+        toast({ 
+            title: "Erro", 
+            description: error.response?.data?.detail || "Não foi possível ajustar a quantidade.", 
+            variant: "destructive" 
+        })
+    }
   }
 
-  const removeItem = (productId: string) => {
-    toast({ title: "Aviso", description: "Remoção de item não implementada. Use o Checkout.", variant: "warning" });
+  // 4. Remove Item (IMPLEMENTADO CORRETAMENTE)
+  const removeItem = async (productId: string) => {
+    const itemToRemove = cartItems.find(item => item.product.id === productId)
+    
+    if (!itemToRemove || !currentSaleId || !itemToRemove.saleItemId) {
+        setCartItems(prev => prev.filter(item => item.product.id !== productId))
+        return
+    }
+
+    try {
+        await removeItemFromSale(currentSaleId, itemToRemove.saleItemId)
+        setCartItems(prev => prev.filter(item => item.product.id !== productId))
+        toast({ title: "Removido", description: "Item removido da venda." })
+    } catch (err: unknown) {
+        toast({ title: "Erro", description: "Erro ao remover item.", variant: "destructive" })
+    }
   }
 
   const clearCart = () => {
     setCartItems([])
   }
 
-
-  // 4. Finalize Sale (API Call que dispara a baixa de estoque)
   const handleConfirmSale = async (paymentMethod: string, amountPaid?: number) => {
     if (!currentSaleId) return
 
@@ -118,19 +156,18 @@ export default function SalesPage() {
         const methodMap: Record<string, string> = { cash: "DINHEIRO", card: "CARTAO", pix: "PIX" }
         const backendMethod = methodMap[paymentMethod] || "DINHEIRO"
 
-        // ESTA É A CHAMADA QUE DISPARA A BAIXA DE ESTOQUE NO BACKEND
         await finalizeSale(currentSaleId, backendMethod) 
         
         toast({
             title: "Venda Finalizada!",
-            description: `Venda #${currentSaleId} concluída. O estoque foi baixado.`,
+            description: `Venda #${currentSaleId} concluída. Estoque baixado.`,
             variant: "success"
         })
 
-        // Reset state
         setCartItems([])
         setCurrentSaleId(null)
         initialized.current = false 
+        setIsPaymentModal(false)
 
     } catch (err: unknown) {
         const error = err as { response?: { data?: { detail?: string } } }
@@ -153,18 +190,15 @@ export default function SalesPage() {
     )
   }
 
-
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        {/* Header */}
         <div className="space-y-2">
           <h1 className="text-3xl font-bold text-foreground">Sistema de Vendas</h1>
           <p className="text-muted-foreground">Venda #{currentSaleId} | {user?.branchId ? `Filial ${user.branchId}` : 'Administrador'}</p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Product Search */}
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
@@ -172,18 +206,17 @@ export default function SalesPage() {
                 <CardDescription>Busca global de produtos por nome ou código</CardDescription>
               </CardHeader>
               <CardContent>
-                {/* ProductSearch chama addToCart */}
                 <ProductSearch onAddToCart={addToCart} />
               </CardContent>
             </Card>
           </div>
 
-          {/* Shopping Cart */}
           <div className="space-y-6">
             <ShoppingCartComponent
               items={cartItems}
-              onUpdateQuantity={updateQuantity}
-              onRemoveItem={removeItem}
+              // Adaptadores de ID (Sales usa product.id, ShoppingCart espera ID para callback)
+              onUpdateQuantity={(id, qtd) => updateQuantity(id, qtd)} 
+              onRemoveItem={(id) => removeItem(id)}
               onClearCart={clearCart}
             />
 
@@ -200,13 +233,12 @@ export default function SalesPage() {
           </div>
         </div>
 
-        {/* Payment Modal */}
         <PaymentModal
           isOpen={isPaymentModalOpen}
           onClose={() => setIsPaymentModal(false)}
           items={cartItems}
           total={total}
-          onConfirmSale={handleConfirmSale} // Chama a função que faz a API call real
+          onConfirmSale={handleConfirmSale}
         />
       </div>
     </DashboardLayout>

@@ -20,7 +20,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-
 import type { User, Branch } from "@/lib/types"
 import { getBranches } from "@/services/branchService"
 import { criarUsuario, atualizarUsuario } from "@/services/usuarioService"
@@ -51,7 +50,7 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
     email: "",
     password: "",
     role: "operator" as RoleKey,
-    branchId: "", // keep as string for Select controlled component
+    branchId: "",
     cpf: "",
   })
 
@@ -59,7 +58,7 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
-  // Load branches when dialog opens
+  // Carregar filiais ao abrir
   useEffect(() => {
     if (!isOpen) return
     let mounted = true
@@ -82,17 +81,16 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
     }
   }, [isOpen, toast])
 
-  // Populate form when editing
+  // Preencher formulário na edição
   useEffect(() => {
     if (user) {
       setFormData({
         name: user.name ?? "",
         email: user.email ?? "",
         password: "",
-        // map backend role (if backend provides different names, adapt accordingly)
         role: (user.role as RoleKey) ?? "operator",
         branchId: user.branchId?.toString() ?? "",
-        cpf: "", // CPF normally isn't returned in listing; keep empty in edit
+        cpf: "", 
       })
     } else {
       setFormData({
@@ -112,20 +110,14 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
     operator: "OPERADOR",
   }
 
-  // Helper to extract a friendly error message from backend responses / Axios errors
   const extractErrorMessage = (err: unknown): string => {
-    // Avoid using `any` for ESLint; use type checks
-    // Axios-like error: has response.data
     const e = err as { response?: { data?: unknown }; message?: string }
     if (e?.response?.data) {
       const data = e.response.data
       if (typeof data === "string") return data
       if (typeof data === "object" && data !== null) {
-        // If there's a "detail" field, use it
         const dd = data as Record<string, unknown>
         if (typeof dd.detail === "string") return dd.detail
-
-        // Otherwise produce a combined message from validation fields
         const parts: string[] = []
         for (const key of Object.keys(dd)) {
           const val = dd[key]
@@ -145,25 +137,33 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
     e.preventDefault()
     setIsLoading(true)
 
+    // --- VALIDAÇÕES (Sem jogar erro no console) ---
+    
+    if (!formData.name.trim() || !formData.email.trim()) {
+        toast({ title: "Atenção", description: "Preencha nome e e-mail.", variant: "destructive" })
+        setIsLoading(false)
+        return
+    }
+
+    if (!user && !formData.password) {
+        toast({ title: "Atenção", description: "Senha é obrigatória para novos usuários.", variant: "destructive" })
+        setIsLoading(false)
+        return
+    }
+
+    if ((formData.role === "manager" || formData.role === "operator") && !formData.branchId) {
+        toast({ title: "Atenção", description: "Selecione uma filial para este cargo.", variant: "destructive" })
+        setIsLoading(false)
+        return
+    }
+
+    if (!user && (!formData.cpf || !formData.cpf.trim())) {
+        toast({ title: "Atenção", description: "CPF é obrigatório.", variant: "destructive" })
+        setIsLoading(false)
+        return
+    }
+
     try {
-      // Basic front validations
-      if (!formData.name.trim() || !formData.email.trim()) {
-        throw new Error("Preencha nome e e-mail.")
-      }
-
-      if (!user && !formData.password) {
-        throw new Error("Senha é obrigatória para novos usuários.")
-      }
-
-      // For manager/operator, filial must be selected
-      if (
-        (formData.role === "manager" || formData.role === "operator") &&
-        !formData.branchId
-      ) {
-        throw new Error("Selecione uma filial para este cargo.")
-      }
-
-      // Build payload with strict typing
       const payload: UserPayload = {
         nome_completo: formData.name.trim(),
         email: formData.email.trim(),
@@ -173,35 +173,26 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
       }
 
       if (!user) {
-        // CPF is required for creation
-        if (!formData.cpf || !formData.cpf.trim()) {
-          throw new Error("CPF é obrigatório.")
-        }
-        // sanitize cpf safely
+        // Criação
         payload.cpf = formData.cpf ? formData.cpf.replace(/\D/g, "") : null
         payload.password = formData.password
         payload.username = formData.email.trim()
+        
+        await criarUsuario(payload)
+        toast({ title: "Sucesso", description: "Usuário criado com sucesso.", variant: "success" })
       } else {
-        // on update: only include password if provided
+        // Edição
         if (formData.password && formData.password.trim().length > 0) {
           payload.password = formData.password
         }
-      }
-
-      // Debug: show payload in console (can be removed later)
-      // console.debug("Payload usuario:", payload)
-
-      if (user) {
         await atualizarUsuario(user.id, payload)
-        toast({ title: "Sucesso", description: "Usuário atualizado." })
-      } else {
-        await criarUsuario(payload)
-        toast({ title: "Sucesso", description: "Usuário criado com sucesso." })
+        toast({ title: "Sucesso", description: "Usuário atualizado.", variant: "success" })
       }
 
       onSave()
       onClose()
     } catch (err) {
+      // Aqui logamos erros reais de rede/backend
       console.error("Erro ao salvar usuário:", err)
       const msg = extractErrorMessage(err)
       toast({
@@ -242,7 +233,6 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
                 />
               </div>
 
-              {/* CPF aparece sempre na criação; no update permanece oculto por padrão */}
               {!user && (
                 <div>
                   <Label>CPF *</Label>
@@ -282,9 +272,7 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
                   <Label>Cargo</Label>
                   <Select
                     value={formData.role}
-                    onValueChange={(v) =>
-                      handleInputChange("role", v as RoleKey)
-                    }
+                    onValueChange={(v) => handleInputChange("role", v as RoleKey)}
                   >
                     <SelectTrigger>
                       <SelectValue />

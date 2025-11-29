@@ -1,5 +1,3 @@
-// frontend/components/sales/product-search.tsx
-
 "use client"
 
 import { useState } from "react"
@@ -9,8 +7,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Search, Plus } from "lucide-react"
 import type { ProductWithCategory } from "@/lib/types"
-import { coreApi } from "@/lib/api"     // <=== CORREÇÃO: Usar coreApi
-import { getProductsWithCategories } from "@/lib/mock-data" // Mantemos para o caso de o endpoint falhar
+import { coreApi } from "@/lib/api"
+import { getProductsWithCategories } from "@/lib/mock-data"
 
 interface ProductSearchProps {
   onAddToCart: (product: ProductWithCategory, quantity: number) => void
@@ -32,24 +30,22 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
     setLoading(true)
 
     try {
-      // Usando o endpoint de busca global (API Principal)
-      // Nota: Este endpoint ainda precisa ser criado no Backend (Passo D)
+      // Endpoint de busca global
       const response = await coreApi.get(`/relatorios/busca-global/?q=${term}`)
       
-      // Mapeamos a resposta da API (que é mais complexa) para a lista de produtos simples
+      // Mapeamento corrigido
       const mappedResults = response.data.map((item: any) => ({
             id: item.id,
             nome: item.nome,
             codigo_barras: item.codigo_barras,
-            // A disponibilidade é uma lista de objetos, aqui simplificamos para o primeiro item de venda (apenas para exibição)
             preco_venda: item.disponibilidade[0]?.preco, 
-            categoria_nome: "API", // Mockar categoria já que a busca global não retorna categoria
+            // CORREÇÃO: Agora usamos o campo 'categoria' que vem do backend
+            categoria_nome: item.categoria || "Geral", 
       }))
 
       setSearchResults(mappedResults)
     } catch (error) {
       console.error("Erro ao buscar produtos:", error)
-      // Em caso de erro na API, voltamos ao mock
       const mockProducts = getProductsWithCategories();
       const query = term.toLowerCase();
       const fallbackResults = mockProducts.filter((product) =>
@@ -57,7 +53,6 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
           (product.codigo_barras?.includes(term))
       );
       setSearchResults(fallbackResults);
-      
     }
 
     setLoading(false)
@@ -85,7 +80,7 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
         <p className="text-sm text-muted-foreground pl-2">Buscando…</p>
       )}
 
-      {searchResults.length > 0 ? ( // Usamos searchResults.length
+      {searchResults.length > 0 ? (
         <Card className="max-h-96 overflow-y-auto">
           <CardContent className="p-0">
             {searchResults.map((product) => (
@@ -97,11 +92,14 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
                   <div className="flex items-center gap-2">
                     <h3 className="font-medium">{product.nome}</h3>
                     <Badge variant="outline" className="text-xs">
+                      {/* Exibe a categoria real */}
                       {product.categoria_nome || "N/A"}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">{product.codigo_barras}</p>
-                  <p className="text-lg font-semibold text-primary">R$ {product.preco_venda?.toFixed(2)}</p>
+                  <p className="text-lg font-semibold text-primary">
+                    R$ {product.preco_venda ? Number(product.preco_venda).toFixed(2) : 'N/A'}
+                  </p>
                 </div>
                 <Button onClick={() => handleAddProduct(product)} size="sm" className="flex items-center gap-1">
                   <Plus className="h-4 w-4" />
