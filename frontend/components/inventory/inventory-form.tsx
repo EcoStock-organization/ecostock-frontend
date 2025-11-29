@@ -14,7 +14,7 @@ import type { InventoryItem, Product } from "@/lib/types"
 interface InventoryFormProps {
   isOpen: boolean
   onClose: () => void
-  item?: InventoryItem // Se undefined, é criação
+  item?: InventoryItem
   branchId: string
   onSave: () => void
 }
@@ -31,15 +31,12 @@ export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: Inven
     quantidade_minima_estoque: "",
   })
 
-  // 1. Carregar lista de produtos disponíveis para seleção
   useEffect(() => {
     if (isOpen && !item) {
-      // Apenas carrega lista completa se for criação
       coreApi.get("/produtos/").then(res => setProducts(res.data))
     }
   }, [isOpen, item])
 
-  // 2. Preencher formulário na edição
   useEffect(() => {
     if (item) {
       setFormData({
@@ -64,19 +61,16 @@ export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: Inven
 
     try {
       const payload = {
-        produto_id: Number(formData.produto_id), // Obrigatório para CREATE
+        produto_id: Number(formData.produto_id),
         quantidade_atual: Number(formData.quantidade_atual),
         preco_venda_atual: Number(formData.preco_venda_atual),
         quantidade_minima_estoque: Number(formData.quantidade_minima_estoque)
       }
 
       if (item) {
-        // Edição: PATCH /filiais/{id}/estoque/{item_id}/
-        // Nota: O serializer de edição pode não precisar de produto_id, mas o de criação precisa
         await coreApi.patch(`/filiais/${branchId}/estoque/${item.id}/`, payload)
         toast({ title: "Sucesso", description: "Estoque atualizado." })
       } else {
-        // Criação: POST /filiais/{id}/estoque/
         await coreApi.post(`/filiais/${branchId}/estoque/`, payload)
         toast({ title: "Sucesso", description: "Item adicionado ao estoque." })
       }

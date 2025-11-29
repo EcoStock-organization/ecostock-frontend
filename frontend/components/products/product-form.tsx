@@ -29,7 +29,6 @@ export function ProductForm({ isOpen, onClose, product, onSave }: ProductFormPro
     id_categoria: "",
     tipo_produto: "UNITARIO",
     esta_ativo: true,
-    // Campos numéricos como string para facilitar edição no input
     preco_venda: "",
     preco_custo: "",
     estoque_minimo: ""
@@ -39,7 +38,6 @@ export function ProductForm({ isOpen, onClose, product, onSave }: ProductFormPro
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
-  // 1. Buscar Categorias
   useEffect(() => {
     if (isOpen) {
         coreApi.get("/produtos/categorias/")
@@ -63,13 +61,11 @@ export function ProductForm({ isOpen, onClose, product, onSave }: ProductFormPro
             id_categoria: product.id_categoria ? product.id_categoria.toString() : "",
             tipo_produto: product.tipo_produto,
             esta_ativo: product.esta_ativo,
-            // Se o produto vier com preço, preenchemos, senão vazio
             preco_venda: product.preco_venda?.toString() || "",
             preco_custo: product.preco_custo?.toString() || "",
             estoque_minimo: product.min_stock?.toString() || ""
         })
       } else {
-        // Resetar form
         setFormData({
             nome: "",
             descricao: "",
@@ -90,7 +86,6 @@ export function ProductForm({ isOpen, onClose, product, onSave }: ProductFormPro
     setIsLoading(true)
 
     try {
-      // Validação básica
       if (!formData.nome || !formData.codigo_barras || !formData.id_categoria) {
         toast({
           title: "Erro de validação",
@@ -101,7 +96,6 @@ export function ProductForm({ isOpen, onClose, product, onSave }: ProductFormPro
         return
       }
 
-      // 2. Montar Payload (Converter tipos para o que o Django espera)
       const payload = {
         nome: formData.nome,
         descricao: formData.descricao,
@@ -109,17 +103,12 @@ export function ProductForm({ isOpen, onClose, product, onSave }: ProductFormPro
         id_categoria: Number(formData.id_categoria), // Django espera número
         tipo_produto: formData.tipo_produto,
         esta_ativo: formData.esta_ativo,
-        // Se o backend aceitar preços na criação do produto:
-        // preco_venda: formData.preco_venda ? parseFloat(formData.preco_venda) : 0,
-        // preco_custo: formData.preco_custo ? parseFloat(formData.preco_custo) : 0,
       }
 
       if (product) {
-        // Edição
         await coreApi.patch(`/produtos/${product.id}/`, payload)
         toast({ title: "Sucesso", description: "Produto atualizado." })
       } else {
-        // Criação
         await coreApi.post('/produtos/', payload)
         toast({ title: "Sucesso", description: "Produto criado." })
       }
@@ -243,20 +232,6 @@ export function ProductForm({ isOpen, onClose, product, onSave }: ProductFormPro
                 <div className="p-4 bg-muted/50 rounded-md text-sm text-muted-foreground">
                     <p><strong>Nota:</strong> A gestão de Preços e Estoque é feita individualmente por filial na aba "Estoque".</p>
                 </div>
-                
-                {/* Campos visuais opcionais, caso queira enviar para o backend futuramente
-                <div>
-                  <Label htmlFor="unitPrice">Preço Sugerido (R$)</Label>
-                  <Input
-                    id="unitPrice"
-                    type="number"
-                    step="0.01"
-                    value={formData.preco_venda}
-                    onChange={(e) => handleInputChange("preco_venda", e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                */}
               </CardContent>
             </Card>
           </div>

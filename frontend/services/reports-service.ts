@@ -4,13 +4,13 @@ export interface SalesChartData {
   month: string
   receita: number
   custo: number
-  [key: string]: string | number // Necessário para Recharts
+  [key: string]: string | number
 }
 
 export interface CategoryChartData {
   name: string
   value: number
-  [key: string]: string | number // Necessário para Recharts
+  [key: string]: string | number
 }
 
 export const getSalesChartData = async (): Promise<SalesChartData[]> => {

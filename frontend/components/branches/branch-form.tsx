@@ -18,7 +18,7 @@ interface BranchFormProps {
   onClose: () => void
   branch?: Branch
   onSave: () => void
-  users: User[] // Lista de usuários reais
+  users: User[]
 }
 
 export function BranchForm({ isOpen, onClose, branch, onSave, users }: BranchFormProps) {
@@ -35,8 +35,6 @@ export function BranchForm({ isOpen, onClose, branch, onSave, users }: BranchFor
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
-  // Filtra apenas gerentes ou admins disponíveis para serem gerentes da filial
-  // Nota: O backend valida unicidade, aqui filtramos para ajudar a UI
   const availableManagers = users.filter(
     (user) => (user.role === "manager" || user.role === "admin")
   )
@@ -54,7 +52,6 @@ export function BranchForm({ isOpen, onClose, branch, onSave, users }: BranchFor
           esta_ativa: branch.esta_ativa,
         })
       } else {
-        // Reset form
         setFormData({
           nome: "", cep: "", logradouro: "", cidade: "", estado: "",
           gerente_id: "", esta_ativa: true,
@@ -68,7 +65,6 @@ export function BranchForm({ isOpen, onClose, branch, onSave, users }: BranchFor
     setIsLoading(true)
 
     try {
-      // Validação básica
       if (!formData.nome || !formData.cep || !formData.logradouro || !formData.cidade || !formData.estado) {
         toast({
           title: "Erro de validação",
@@ -85,11 +81,9 @@ export function BranchForm({ isOpen, onClose, branch, onSave, users }: BranchFor
       }
 
       if (branch) {
-        // Edição
         await coreApi.patch(`/filiais/${branch.id}/`, payload)
         toast({ title: "Sucesso", description: "Filial atualizada." })
       } else {
-        // Criação
         await coreApi.post("/filiais/", payload)
         toast({ title: "Sucesso", description: "Filial criada." })
       }

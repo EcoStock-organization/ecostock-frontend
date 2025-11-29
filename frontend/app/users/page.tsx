@@ -31,22 +31,18 @@ export default function UsersPage() {
   const [activeFilter, setActiveFilter] = useState<string>("all")
   const { toast } = useToast()
 
-  // 1. Buscar Usuários Reais
   const fetchUsers = async () => {
     setIsLoading(true)
     try {
       const response = await coreApi.get("/usuarios/")
       
-      // Mapeamento: Backend (snake_case) -> Frontend (camelCase)
       const mappedUsers: User[] = response.data.map((u: any) => ({
         id: u.id.toString(),
-        name: u.nome_completo,   // O erro estava aqui (frontend esperava name, recebia undefined)
+        name: u.nome_completo,
         email: u.email,
-        role: u.cargo.toLowerCase(), // 'ADMIN' -> 'admin'
+        role: u.cargo.toLowerCase(),
         branchId: u.filial,
         isActive: u.ativo,
-        // Se o backend enviar o CPF e você quiser usar no form de edição, adicione à interface User depois
-        // cpf: u.cpf 
       }))
 
       setUsers(mappedUsers)
@@ -76,7 +72,6 @@ export default function UsersPage() {
     setIsFormOpen(true)
   }
 
-  // Função chamada após salvar (sucesso) no formulário filho
   const handleSaveSuccess = () => {
     fetchUsers() // Recarrega a lista
     setIsFormOpen(false)
@@ -87,9 +82,6 @@ export default function UsersPage() {
   }
 
   const handleToggleStatus = async (user: User) => {
-    // O backend precisa de um endpoint PATCH para isso, ou enviamos o objeto completo
-    // Por simplificação, vamos assumir que editar o usuário funciona
-    // Se não tiver endpoint específico, pule esta implementação ou use o endpoint de edição
     toast({ title: "Funcionalidade em desenvolvimento no backend" })
   }
 

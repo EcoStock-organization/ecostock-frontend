@@ -8,13 +8,12 @@ import type { Branch, User } from "@/lib/types"
 
 interface BranchCardProps {
   branch: Branch
-  users: User[] // Nova prop para mapear o gerente
+  users: User[]
   onEdit: (branch: Branch) => void
   onDelete: (branchId: number) => void
 }
 
 export function BranchCard({ branch, users, onEdit, onDelete }: BranchCardProps) {
-  // Tenta encontrar o gerente na lista de usuários passada via props
   const manager = users.find((user) => Number(user.id) === branch.gerente_id)
 
   return (

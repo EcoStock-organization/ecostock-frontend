@@ -30,7 +30,7 @@ export function CheckoutHeader({ user, branch }: CheckoutHeaderProps) {
           <div>
             <h1 className="text-2xl font-bold text-foreground font-display">EcoStock - Frente de Caixa</h1>
             <p className="text-sm text-muted-foreground">
-              {user.name} • {branch?.name || "Filial"}
+              {user.name} • {branch?.nome || "Carregando filial..."}
             </p>
           </div>
         </div>

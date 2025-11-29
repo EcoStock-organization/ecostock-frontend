@@ -30,7 +30,6 @@ export function CartSummary({
   const handleFinalizeSale = () => {
     if (paymentMethod) {
       alert(`Venda finalizada com ${paymentMethod}`)
-      // TODO: Implement sale completion logic
     }
   }
 

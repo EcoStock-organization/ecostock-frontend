@@ -30,16 +30,13 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
     setLoading(true)
 
     try {
-      // Endpoint de busca global
       const response = await coreApi.get(`/relatorios/busca-global/?q=${term}`)
       
-      // Mapeamento corrigido
       const mappedResults = response.data.map((item: any) => ({
             id: item.id,
             nome: item.nome,
             codigo_barras: item.codigo_barras,
             preco_venda: item.disponibilidade[0]?.preco, 
-            // CORREÇÃO: Agora usamos o campo 'categoria' que vem do backend
             categoria_nome: item.categoria || "Geral", 
       }))
 
@@ -92,7 +89,6 @@ export function ProductSearch({ onAddToCart }: ProductSearchProps) {
                   <div className="flex items-center gap-2">
                     <h3 className="font-medium">{product.nome}</h3>
                     <Badge variant="outline" className="text-xs">
-                      {/* Exibe a categoria real */}
                       {product.categoria_nome || "N/A"}
                     </Badge>
                   </div>

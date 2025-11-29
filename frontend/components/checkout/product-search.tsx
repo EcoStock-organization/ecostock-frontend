@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, Package } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,7 +12,7 @@ import { getBranchStock } from "@/services/stock-service"
 interface ProductSearchProps {
   branchId?: string
   onAddToCart: (item: InventoryItem, quantity: number) => void
-  lastUpdate?: number // GATILHO DE ATUALIZAÇÃO
+  lastUpdate?: number
 }
 
 export function ProductSearch({ branchId, onAddToCart, lastUpdate }: ProductSearchProps) {
@@ -20,7 +20,6 @@ export function ProductSearch({ branchId, onAddToCart, lastUpdate }: ProductSear
   const [stockItems, setStockItems] = useState<InventoryItem[]>([])
   const [isOpen, setIsOpen] = useState(false)
 
-  // Recarrega estoque quando branch muda OU quando lastUpdate muda (venda finalizada)
   useEffect(() => {
     if (branchId) {
       getBranchStock(branchId)
@@ -54,7 +53,7 @@ export function ProductSearch({ branchId, onAddToCart, lastUpdate }: ProductSear
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar produto..."
+          placeholder="Buscar produto (nome ou código)..."
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value)
@@ -88,6 +87,7 @@ export function ProductSearch({ branchId, onAddToCart, lastUpdate }: ProductSear
                      <span className="text-muted-foreground font-mono">
                         {item.produto.codigo_barras}
                      </span>
+                     {/* Mostra estoque atualizado em tempo real */}
                      <span className={`font-medium ${item.quantidade_atual < 10 ? 'text-orange-500' : 'text-green-600'}`}>
                         Estoque: {item.quantidade_atual}
                      </span>

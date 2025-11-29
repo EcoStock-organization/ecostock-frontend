@@ -27,7 +27,6 @@ export default function SalesPage() {
   const [isLoadingSale, setIsLoadingSale] = useState(true)
   const initialized = useRef(false) 
 
-  // 1. Init Sale Logic
   useEffect(() => {
       const initSale = async () => {
           if (!user?.id || currentSaleId || initialized.current) return
@@ -49,7 +48,6 @@ export default function SalesPage() {
       initSale()
   }, [user, currentSaleId, toast])
   
-  // 2. Add to Cart
   const addToCart = async (product: ProductWithCategory, quantity: number) => {
     if (!currentSaleId) {
         toast({ title: "Aviso", description: "Venda não iniciada.", variant: "destructive" });
@@ -91,19 +89,16 @@ export default function SalesPage() {
     }
   }
 
-  // 3. Update Quantity (IMPLEMENTADO CORRETAMENTE)
   const updateQuantity = async (productId: string, quantity: number) => {
     const currentItem = cartItems.find(item => item.product.id === productId)
     if (!currentItem || !currentSaleId || !currentItem.saleItemId) return
 
-    // Se 0, remove
     if (quantity === 0) {
         removeItem(productId)
         return
     }
 
     try {
-        // Chama API PATCH
         await updateItemQuantityInSale(currentSaleId, currentItem.saleItemId, quantity)
 
         setCartItems(prev => prev.map(item => {
@@ -127,7 +122,6 @@ export default function SalesPage() {
     }
   }
 
-  // 4. Remove Item (IMPLEMENTADO CORRETAMENTE)
   const removeItem = async (productId: string) => {
     const itemToRemove = cartItems.find(item => item.product.id === productId)
     
@@ -214,7 +208,6 @@ export default function SalesPage() {
           <div className="space-y-6">
             <ShoppingCartComponent
               items={cartItems}
-              // Adaptadores de ID (Sales usa product.id, ShoppingCart espera ID para callback)
               onUpdateQuantity={(id, qtd) => updateQuantity(id, qtd)} 
               onRemoveItem={(id) => removeItem(id)}
               onClearCart={clearCart}

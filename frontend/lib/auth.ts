@@ -23,7 +23,6 @@ export class AuthService {
 
   async login(email: string, password: string): Promise<User> {
     try {
-      // 1. Obter Token
       const { data } = await authApi.post('/token/', { 
         username: email, 
         password 
@@ -32,10 +31,8 @@ export class AuthService {
       Cookies.set('access_token', data.access);
       Cookies.set('refresh_token', data.refresh);
 
-      // 2. Decodificar ID
       const decoded: { user_id: number } = jwtDecode(data.access);
       
-      // 3. Buscar Perfil no Backend
       const response = await coreApi.get(`/usuarios/?usuario_id_auth=${decoded.user_id}`);
       const userProfile = response.data[0]; 
 
@@ -43,16 +40,12 @@ export class AuthService {
         throw new Error('Perfil de usuário não encontrado.');
       }
 
-      // --- O GRANDE TRADUTOR ---
-      // Converte o português do banco para o inglês do código
       const roleMap: Record<string, "admin" | "manager" | "operator"> = {
         "ADMIN": "admin",
         "GERENTE": "manager",
         "OPERADOR": "operator"
       };
 
-      // Pega o cargo do banco (ex: "OPERADOR") e traduz (ex: "operator")
-      // Se não encontrar, assume "operator" por segurança
       const translatedRole = roleMap[userProfile.cargo] || "operator";
 
       const user: User = {

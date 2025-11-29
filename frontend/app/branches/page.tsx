@@ -26,7 +26,6 @@ export default function BranchesPage() {
 
   const { toast } = useToast()
 
-  // 1. Buscar Dados Reais (Filiais e Usuários)
   const fetchData = async () => {
     setIsLoading(true)
     try {
@@ -52,7 +51,6 @@ export default function BranchesPage() {
     fetchData()
   }, [])
 
-  // Filtro no Cliente
   const filteredBranches = branches.filter((branch) => {
     const matchesSearch =
       branch.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,7 +66,7 @@ export default function BranchesPage() {
   })
 
   const handleSaveBranch = () => {
-    fetchData() // Recarrega dados do servidor
+    fetchData()
     setEditingBranch(undefined)
     setIsFormOpen(false)
   }

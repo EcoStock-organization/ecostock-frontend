@@ -28,7 +28,6 @@ export function MetricCard({
   return (
     <Card
       className={cn(
-        /* Bordas mais arredondadas e orgânicas, sombras suaves */
         "transition-organic hover-lift border border-border/40 shadow-lg bg-gradient-to-br from-card via-card to-card/98 backdrop-blur-sm overflow-hidden relative",
         variant === "warning" && "border-status-warning/30 bg-gradient-to-br from-status-warning/5 to-card",
         className,

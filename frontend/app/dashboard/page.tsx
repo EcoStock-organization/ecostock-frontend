@@ -8,7 +8,6 @@ import { RecentSales } from "@/components/dashboard/recent-sales"
 import { DollarSign, ShoppingCart, Package, Building2, Leaf } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
-// Novos imports
 import { getDashboardMetrics } from "@/services/dashboard-service"
 import type { DashboardMetrics } from "@/lib/types"
 
@@ -16,11 +15,9 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const isManager = user?.role === "manager"
   
-  // Estado para as métricas reais
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Buscar dados ao carregar
   useEffect(() => {
     getDashboardMetrics()
       .then(setMetrics)
@@ -28,7 +25,6 @@ export default function DashboardPage() {
       .finally(() => setIsLoading(false))
   }, [])
 
-  // Valores padrão ou de loading
   const displayMetrics = metrics || {
     totalRevenue: 0,
     totalSales: 0,

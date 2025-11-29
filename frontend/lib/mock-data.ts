@@ -1,6 +1,5 @@
 import type { User, Branch, Product, Category } from "./types"
 
-// Mock compatível com a nova tipagem (IDs numéricos)
 export const mockUsers: User[] = [
   {
     id: 1,
@@ -43,7 +42,6 @@ export const mockProducts: Product[] = [
 
 export const getProductsWithCategories = (): Product[] => mockProducts;
 
-// Adicione funções vazias ou mocks simples se algum componente antigo ainda chamar
 export const getInventoryWithProducts = (): unknown[] => [];
 export const mockDashboardMetrics = { totalRevenue: 0, totalSales: 0 };
 export const mockStockAlerts = [];

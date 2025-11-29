@@ -1,5 +1,3 @@
-// Database schema types for the inventory management system
-
 export interface User {
   id: string | number;
   email: string;
@@ -8,7 +6,6 @@ export interface User {
   branchId?: string | number;
   isActive?: boolean;
   password?: string;
-  // ADICIONE ESTES DOIS CAMPOS:
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -26,62 +23,47 @@ export interface Branch {
   updatedAt?: Date;
 }
 
-// === PRODUTOS ===
-
 export interface Category {
   id: number;
-  nome: string; // DEVE SER 'nome'
+  nome: string;
   descricao?: string;
 }
 
 export interface Product {
   id: number;
-  codigo_barras: string; // DEVE SER 'codigo_barras'
-  nome: string;          // DEVE SER 'nome'
+  codigo_barras: string;
+  nome: string;
   descricao?: string;
   tipo_produto: "UNITARIO" | "PESAVEL";
   esta_ativo: boolean;
-  
-  // Campos de leitura (vindos do serializer)
   categoria_nome?: string;
-  
-  // Campos de escrita (para enviar ao backend)
   id_categoria?: number;
-  
-  // Campos opcionais (UI)
   preco_venda?: number;
   preco_custo?: number;
   estoque_minimo?: number;
 }
 
-// Se o componente ProductSearch usa ProductWithCategory:
 export interface ProductWithCategory extends Product {
   category?: Category; // Mantenha category
-  // Adicione unitPrice, barcode, name aqui, se o mock ainda precisar:
   unitPrice?: number;
   barcode?: string;
   name?: string;
 }
 
-// === ESTOQUE ===
-
 export interface InventoryItem {
   id: number;
-  produto: Product; // O backend retorna o objeto aninhado
+  produto: Product;
   quantidade_atual: number;
-  preco_venda_atual: number; // O backend manda Decimal (string/number)
+  preco_venda_atual: number;
   quantidade_minima_estoque: number;
 }
 
-// Tipo auxiliar para formulários de estoque
 export interface InventoryFormData {
   produto_id: string;
   quantidade_atual: string;
   preco_venda_atual: string;
   quantidade_minima_estoque: string;
 }
-
-// === VENDAS ===
 
 export interface SaleItem {
   id: number;
@@ -99,11 +81,9 @@ export interface Sale {
   status: "ABERTA" | "FINALIZADA" | "CANCELADA";
   forma_pagamento: string | null;
   valor_total: number;
-  itens_venda: SaleItem[]; // Mantém para retrocompatibilidade se necessário
-  itens?: SaleItem[];      // Adiciona o campo que o serializer VendaSerializer envia
+  itens_venda: SaleItem[]; 
+  itens?: SaleItem[];      
 }
-
-// === FRONTEND ONLY (Carrinho) ===
 
 export interface CartItem {
   productId: string;
@@ -120,8 +100,6 @@ export interface CheckoutSession {
   total: number;
   paymentMethod?: "cash" | "card" | "pix";
 }
-
-// === DASHBOARD ===
 
 export interface DashboardMetrics {
   totalRevenue: number;
@@ -143,6 +121,5 @@ export interface StockAlert {
 }
 
 export interface InventoryItemWithProduct extends InventoryItem {
-  // InventoryItem já tem 'produto', mas aqui reforçamos tipagens extras se necessário
   branch?: Branch;
 }

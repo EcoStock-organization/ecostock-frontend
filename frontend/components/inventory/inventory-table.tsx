@@ -20,18 +20,15 @@ export function InventoryTable() {
   const { toast } = useToast()
   const isManager = user?.role === "manager"
 
-  // Estados de Dados
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   
-  // Estados de Controle
   const [selectedBranchId, setSelectedBranchId] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InventoryItem | undefined>()
 
-  // 1. Carregar Filiais (apenas se Admin, se Manager usa a do user)
   useEffect(() => {
     const loadBranches = async () => {
       if (isManager && user?.branchId) {
@@ -40,7 +37,6 @@ export function InventoryTable() {
         try {
           const res = await coreApi.get("/filiais/")
           setBranches(res.data)
-          // Seleciona a primeira filial por padrão se houver
           if (res.data.length > 0) {
             setSelectedBranchId(res.data[0].id.toString())
           }
@@ -52,13 +48,11 @@ export function InventoryTable() {
     loadBranches()
   }, [isManager, user])
 
-  // 2. Carregar Estoque (depende da filial selecionada)
   const fetchInventory = useCallback(async () => {
     if (!selectedBranchId) return
 
     setIsLoading(true)
     try {
-      // Endpoint aninhado: /api/filiais/{id}/estoque/
       const res = await coreApi.get(`/filiais/${selectedBranchId}/estoque/`)
       setInventory(res.data)
     } catch (error) {
@@ -78,7 +72,6 @@ export function InventoryTable() {
     fetchInventory()
   }, [fetchInventory])
 
-  // Filtragem Local
   const filteredData = inventory.filter((item) => {
     const matchesSearch =
       item.produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -119,7 +112,6 @@ export function InventoryTable() {
   const handleDelete = async (itemId: number) => {
     if (!confirm("Remover este item do estoque?")) return
     try {
-        // Endpoint de detalhe: /filiais/{id_filial}/estoque/{id_item}/
         await coreApi.delete(`/filiais/${selectedBranchId}/estoque/${itemId}/`)
         setInventory(prev => prev.filter(i => i.id !== itemId))
         toast({ title: "Item removido" })
@@ -229,10 +221,6 @@ export function InventoryTable() {
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {/* Deletar item de estoque geralmente não é recomendado se houver vendas, mas deixamos aqui */}
-                          {/* <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(item.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button> */}
                         </TableCell>
                       </TableRow>
                     )

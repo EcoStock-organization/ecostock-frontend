@@ -1,6 +1,5 @@
 import { coreApi } from "@/lib/api"
 
-// Definição local ou importada de tipos se preferir
 type UserPayload = {
   nome_completo: string
   email: string
@@ -13,7 +12,6 @@ type UserPayload = {
 }
 
 export const criarUsuario = async (data: UserPayload) => {
-  // Endpoint correto do backend principal
   const response = await coreApi.post("/usuarios/criar/", data)
   return response.data
 }

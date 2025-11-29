@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ProductForm } from "./product-form"
 import { Search, Plus, Edit, Trash2, Package } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { coreApi } from "@/lib/api" // Importando a API real
+import { coreApi } from "@/lib/api"
 import type { Product, Category } from "@/lib/types"
 
 export function ProductGrid() {
@@ -24,7 +24,6 @@ export function ProductGrid() {
 
   const { toast } = useToast()
 
-  // Função para buscar dados reais
   const fetchData = async () => {
     setIsLoading(true)
     try {
@@ -46,12 +45,10 @@ export function ProductGrid() {
     }
   }
 
-  // Carregar ao montar
   useEffect(() => {
     fetchData()
   }, [])
 
-  // Filtragem no Front (pode ser movida para o back se a lista for muito grande)
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,7 +63,6 @@ export function ProductGrid() {
   })
 
   const handleSaveProduct = () => {
-    // Recarrega os dados para garantir sincronia
     fetchData()
     setEditingProduct(undefined)
     setIsFormOpen(false)
@@ -83,7 +79,6 @@ export function ProductGrid() {
     try {
       await coreApi.delete(`/produtos/${productId}/`)
       
-      // Atualiza a lista localmente
       setProducts((prev) => prev.filter((p) => p.id !== productId))
       
       toast({

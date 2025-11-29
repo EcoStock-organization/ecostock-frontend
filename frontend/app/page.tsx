@@ -11,7 +11,6 @@ export default function HomePage() {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated && user) {
-        // Verifica a role traduzida
         if (user.role === "operator") {
           router.push("/checkout")
         } else {

@@ -58,7 +58,6 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
-  // Carregar filiais ao abrir
   useEffect(() => {
     if (!isOpen) return
     let mounted = true
@@ -81,7 +80,6 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
     }
   }, [isOpen, toast])
 
-  // Preencher formulário na edição
   useEffect(() => {
     if (user) {
       setFormData({
@@ -137,8 +135,6 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
     e.preventDefault()
     setIsLoading(true)
 
-    // --- VALIDAÇÕES (Sem jogar erro no console) ---
-    
     if (!formData.name.trim() || !formData.email.trim()) {
         toast({ title: "Atenção", description: "Preencha nome e e-mail.", variant: "destructive" })
         setIsLoading(false)
@@ -173,7 +169,6 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
       }
 
       if (!user) {
-        // Criação
         payload.cpf = formData.cpf ? formData.cpf.replace(/\D/g, "") : null
         payload.password = formData.password
         payload.username = formData.email.trim()
@@ -181,7 +176,6 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
         await criarUsuario(payload)
         toast({ title: "Sucesso", description: "Usuário criado com sucesso.", variant: "success" })
       } else {
-        // Edição
         if (formData.password && formData.password.trim().length > 0) {
           payload.password = formData.password
         }
@@ -192,7 +186,6 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
       onSave()
       onClose()
     } catch (err) {
-      // Aqui logamos erros reais de rede/backend
       console.error("Erro ao salvar usuário:", err)
       const msg = extractErrorMessage(err)
       toast({
