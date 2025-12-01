@@ -72,14 +72,6 @@ export default function ReportsPage() {
             <h1 className="text-3xl font-bold text-foreground font-display">Relatórios</h1>
             <p className="text-muted-foreground mt-1">Análise de desempenho financeiro e estoque global</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2">
-              <FileText className="h-4 w-4" /> PDF
-            </Button>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Download className="h-4 w-4" /> CSV
-            </Button>
-          </div>
         </div>
 
         {isLoading ? (
@@ -88,30 +80,7 @@ export default function ReportsPage() {
           </div>
         ) : (
           <>
-            <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="hover-lift">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-brand" />
-                    Receita vs Custo (6 Meses)
-                    </CardTitle>
-                    <CardDescription>Evolução financeira mensal</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                    <LineChart data={salesData}>
-                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                        <XAxis dataKey="month" className="text-xs" />
-                        <YAxis className="text-xs" />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Legend />
-                        <Line type="monotone" dataKey="receita" stroke="var(--color-receita)" strokeWidth={2} dot={{ r: 4 }} />
-                        <Line type="monotone" dataKey="custo" stroke="var(--color-custo)" strokeWidth={2} dot={{ r: 4 }} />
-                    </LineChart>
-                    </ChartContainer>
-                </CardContent>
-                </Card>
-
+            <div className="grid grid-cols-1 gap-4 w-full">
                 <Card className="hover-lift">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
