@@ -136,7 +136,7 @@ export default function BranchesPage() {
           <p className="text-muted-foreground">Gerencie filiais, gerentes e configurações</p>
         </div>
 
-        <BranchStats />
+        <BranchStats branches={branches} users={users} />
 
         <Card>
           <CardHeader>

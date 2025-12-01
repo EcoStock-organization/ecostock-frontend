@@ -1,12 +1,20 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Building2, Users, TrendingUp, AlertCircle } from "lucide-react"
-import { mockBranches, mockUsers } from "@/lib/mock-data"
+import type { Branch, User } from "@/lib/types"
 
-export function BranchStats() {
-  const totalBranches = mockBranches.length
-  const activeBranches = mockBranches.filter((branch) => branch.isActive).length
+interface BranchStatsProps {
+  branches: Branch[]
+  users: User[]
+}
+
+export function BranchStats({ branches, users }: BranchStatsProps) {
+  const totalBranches = branches.length
+  const activeBranches = branches.filter((branch) => branch.esta_ativa).length
   const inactiveBranches = totalBranches - activeBranches
-  const managersAssigned = mockUsers.filter((user) => user.role === "manager" && user.branchId).length
+  
+  const managersAssigned = users.filter((user) => user.role === "manager" && user.branchId).length
 
   const stats = [
     {
