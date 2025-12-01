@@ -147,8 +147,8 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
         return
     }
 
-    if ((formData.role === "manager" || formData.role === "operator") && !formData.branchId) {
-        toast({ title: "Atenção", description: "Selecione uma filial para este cargo.", variant: "destructive" })
+    if (formData.role === "operator" && !formData.branchId) {
+        toast({ title: "Atenção", description: "Operadores de caixa precisam estar vinculados a uma filial.", variant: "destructive" })
         setIsLoading(false)
         return
     }

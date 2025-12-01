@@ -19,6 +19,8 @@ export interface Branch {
   estado: string;
   gerente_id?: number | null;
   esta_ativa: boolean;
+  total_produtos?: number;
+  total_vendas?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }

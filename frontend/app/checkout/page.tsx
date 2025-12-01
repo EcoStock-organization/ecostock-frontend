@@ -4,20 +4,31 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { CheckoutHeader } from "@/components/checkout/checkout-header"
-import { ProductSearch } from "@/components/checkout/product-search"
+import { ProductSearch } from "@/components/sales/product-search" 
 import { CartSummary } from "@/components/checkout/cart-summary"
 import { PaymentModal } from "@/components/sales/payment-modal"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Receipt, Loader2 } from "lucide-react"
-
-import type { CartItem, InventoryItem, Branch, SaleItem } from "@/lib/types"
+import { CheckCircle2, ShoppingCart, ArrowRight } from "lucide-react"
+import type { CartItem, Branch, SaleItem, ProductWithCategory } from "@/lib/types"
 import { createSale, addItemToSale, finalizeSale, removeItemFromSale, updateItemQuantityInSale } from "@/services/sales-service"
 import { getBranches } from "@/services/branchService"
 
 interface CartItemWithSaleId extends CartItem {
-  saleItemId?: number
+    productId: string;
+    product: ProductWithCategory;
+    saleItemId?: number;
+    unitPrice: number;
+}
+
+interface ApiError {
+    response?: {
+        data?: {
+            detail?: string
+        }
+    }
 }
 
 export default function CheckoutPage() {
@@ -28,10 +39,11 @@ export default function CheckoutPage() {
   const [currentSaleId, setCurrentSaleId] = useState<string | null>(null)
   const [cartItems, setCartItems] = useState<CartItemWithSaleId[]>([])
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false)
+  const [lastChange, setLastChange] = useState(0)
+  
   const [isLoadingSale, setIsLoadingSale] = useState(false)
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null)
-  
-  const [lastSaleTime, setLastSaleTime] = useState<number>(Date.now())
   
   const initialized = useRef(false)
 
@@ -49,40 +61,44 @@ export default function CheckoutPage() {
     }
   }, [isAuthenticated, user, router])
 
-  useEffect(() => {
-    const initSale = async () => {
-      if (!user?.branchId || currentSaleId || initialized.current) return
-      
-      initialized.current = true
-      setIsLoadingSale(true)
-      try {
+  const getOrCreateSaleId = async (): Promise<string | null> => {
+    if (currentSaleId) return currentSaleId;
+    
+    if (!user?.branchId) {
+        toast({ title: "Erro", description: "Operador sem filial vinculada.", variant: "destructive" })
+        return null;
+    }
+
+    setIsLoadingSale(true)
+    try {
         const sale = await createSale(user.branchId)
         setCurrentSaleId(sale.id)
-        console.log("Venda iniciada:", sale.id)
-      } catch (error) {
-        console.error(error)
-        toast({ title: "Erro", description: "Falha ao iniciar sistema de vendas.", variant: "destructive" })
-      } finally {
+        return sale.id
+    } catch (err: unknown) {
+        console.error(err)
+        toast({ title: "Erro", description: "Não foi possível abrir a venda no sistema.", variant: "destructive" })
+        return null
+    } finally {
         setIsLoadingSale(false)
-      }
     }
+  }
+
+  const addToCart = async (product: ProductWithCategory, quantity = 1) => {
+    const saleId = await getOrCreateSaleId();
+    if (!saleId) return;
+
+    const unitPrice = product.preco_venda || 0;
     
-    initSale()
-  }, [user, currentSaleId, toast])
-
-  const addToCart = async (inventoryItem: InventoryItem, quantity = 1) => {
-    if (!currentSaleId) return
-
     try {
-      const itemVenda = await addItemToSale(currentSaleId, Number(inventoryItem.produto.id), quantity) as SaleItem
+      const itemVenda = await addItemToSale(saleId, Number(product.id), quantity) as SaleItem
       
       setCartItems((prev) => {
         const newItem: CartItemWithSaleId = {
-          productId: inventoryItem.produto.id.toString(),
-          product: inventoryItem.produto,
+          productId: product.id.toString(),
+          product: { ...product, unitPrice },
           quantity: quantity,
-          unitPrice: Number(inventoryItem.preco_venda_atual),
-          subtotal: quantity * Number(inventoryItem.preco_venda_atual),
+          unitPrice: unitPrice,
+          subtotal: quantity * unitPrice,
           saleItemId: itemVenda.id
         }
         
@@ -96,46 +112,49 @@ export default function CheckoutPage() {
         return [...prev, newItem]
       })
 
-      toast({ title: "Adicionado", description: `${inventoryItem.produto.nome}` })
+      toast({ title: "Item registrado", description: product.nome, duration: 1000 })
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } | string[] } }
+      const error = err as ApiError
       const msg = error.response?.data?.detail || "Erro ao adicionar item."
       toast({ title: "Erro", description: msg, variant: "destructive" })
     }
   }
 
-  const handleConfirmSale = async (paymentMethod: string) => {
+  const handleConfirmSale = async (paymentMethod: string, amountPaid?: number) => {
     if (!currentSaleId) return
 
     try {
-      const methodMap: Record<string, string> = {
-        cash: "DINHEIRO", card: "CARTAO", pix: "PIX"
-      }
+      const methodMap: Record<string, string> = { cash: "DINHEIRO", card: "CARTAO", pix: "PIX" }
       const backendMethod = methodMap[paymentMethod] || "DINHEIRO"
 
       await finalizeSale(currentSaleId, backendMethod)
       
-      toast({
-        title: "Venda Finalizada!",
-        description: `Venda #${currentSaleId} concluída com sucesso.`,
-        variant: "success"
-      })
+      const total = cartItems.reduce((acc, item) => acc + item.subtotal, 0)
+      if (amountPaid && amountPaid > total) {
+          setLastChange(amountPaid - total)
+      } else {
+          setLastChange(0)
+      }
 
-      setCartItems([])
-      setCurrentSaleId(null)
-      initialized.current = false
       setIsPaymentModalOpen(false)
+      setIsSuccessModalOpen(true)
       
-      setLastSaleTime(Date.now())
-
+      setCartItems([])
+      
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { detail?: string } } }
+      const error = err as ApiError
       toast({ 
         title: "Erro ao finalizar", 
-        description: error.response?.data?.detail || "Tente novamente.", 
+        description: error.response?.data?.detail || "Falha na baixa de estoque.", 
         variant: "destructive" 
       })
     }
+  }
+
+  const startNextSale = () => {
+      setIsSuccessModalOpen(false)
+      setCurrentSaleId(null)
+      setLastChange(0)
   }
   
   const updateQuantity = async (productId: string, newQuantity: number) => {
@@ -150,93 +169,88 @@ export default function CheckoutPage() {
 
     try {
         await updateItemQuantityInSale(currentSaleId, currentItem.saleItemId, newQuantity)
-
         setCartItems(prev => prev.map(item => 
           item.productId === productId 
             ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.unitPrice }
             : item
         ))
     } catch (err: unknown) {
-        const error = err as { response?: { data?: { detail?: string } } }
-        toast({ title: "Erro", description: error.response?.data?.detail || "Estoque insuficiente.", variant: "destructive" })
+        const error = err as ApiError
+        toast({ title: "Estoque insuficiente", description: error.response?.data?.detail, variant: "destructive" })
     }
   }
 
   const removeItem = async (productId: string) => {
     const itemToRemove = cartItems.find(item => item.productId === productId)
-    
-    if (!itemToRemove || !currentSaleId || !itemToRemove.saleItemId) {
-      setCartItems((prev) => prev.filter((item) => item.productId !== productId))
-      return
-    }
+    if (!itemToRemove || !currentSaleId || !itemToRemove.saleItemId) return
 
     try {
       await removeItemFromSale(currentSaleId, itemToRemove.saleItemId)
       setCartItems((prev) => prev.filter((item) => item.productId !== productId))
-      toast({ title: "Removido", description: "Item removido da venda.", variant: "default" })
-
     } catch (err: unknown) {
-        const error = err as { response?: { data?: { detail?: string } } }
-        const errorMsg = error.response?.data?.detail || "Não foi possível remover."
-        toast({ title: "Erro", description: errorMsg, variant: "destructive" })
+        console.error(err);
+        toast({ title: "Erro", description: "Não foi possível remover.", variant: "destructive" })
     }
   }
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0)
   
-  if (!user || isLoadingSale) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-app-gradient">
-        <div className="text-center">
-          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Iniciando caixa...</p>
-        </div>
-      </div>
-    )
-  }
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-app-gradient flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-background flex flex-col overflow-hidden">
       <CheckoutHeader user={user} branch={currentBranch || undefined} />
 
       <div className="flex-1 flex overflow-hidden p-4 gap-4">
-        <div className="w-3/5 flex flex-col gap-4 overflow-y-auto">
-          <Card className="border-l-4 border-l-primary">
-            <CardContent className="pt-6">
-              <h2 className="text-2xl font-bold mb-2">Venda #{currentSaleId || "..."}</h2>
-              <p className="text-muted-foreground">Adicione produtos para começar.</p>
+        {/* Lado Esquerdo: Busca e Lista */}
+        <div className="w-3/5 flex flex-col gap-4 overflow-y-auto pr-2">
+          <Card className="border-l-4 border-l-primary shadow-sm">
+            <CardContent className="pt-6 pb-6 flex justify-between items-center">
+                <div>
+                    <h2 className="text-2xl font-bold text-foreground">
+                        {currentSaleId ? `Venda #${currentSaleId}` : "Caixa Livre"}
+                    </h2>
+                    <p className="text-muted-foreground">
+                        {currentSaleId ? "Venda em andamento" : "Adicione um produto para iniciar"}
+                    </p>
+                </div>
+                <ShoppingCart className={`h-8 w-8 ${currentSaleId ? "text-primary" : "text-muted"} opacity-20`} />
             </CardContent>
           </Card>
           
           <ProductSearch 
             branchId={user.branchId?.toString()} 
+            cartItems={cartItems}
             onAddToCart={addToCart}
-            lastUpdate={lastSaleTime}
           />
         </div>
 
-        <div className="w-2/5">
-          <CartSummary
-            cartItems={cartItems}
-            subtotal={subtotal}
-            discount={0}
-            total={subtotal}
-            onUpdateQuantity={updateQuantity}
-            onRemoveItem={removeItem}
-            onDiscountChange={() => {}}
-          />
+        {/* Lado Direito: Resumo e Pagamento */}
+        <div className="w-2/5 flex flex-col">
+          <div className="flex-1 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+              <CartSummary
+                cartItems={cartItems}
+                subtotal={subtotal}
+                discount={0}
+                total={subtotal}
+                onUpdateQuantity={updateQuantity}
+                onRemoveItem={removeItem}
+                onDiscountChange={() => {}}
+              />
+          </div>
           
-          {cartItems.length > 0 && (
-             <div className="mt-4">
-                 <Button 
-                    className="w-full h-14 text-xl font-bold shadow-lg" 
-                    onClick={() => setIsPaymentModalOpen(true)}
-                 >
-                    <Receipt className="mr-2 h-6 w-6" />
-                    Pagar R$ {subtotal.toFixed(2)}
-                 </Button>
-             </div>
-          )}
+          <div className="mt-4">
+              <Button 
+                className="w-full h-16 shadow-lg bg-green-600 hover:bg-green-700 text-white relative" 
+                size="lg"
+                disabled={cartItems.length === 0}
+                onClick={() => setIsPaymentModalOpen(true)}
+              >
+                <span className="text-xl font-bold tracking-wide">FINALIZAR VENDA</span>
+                
+                <ArrowRight className="absolute right-6 h-6 w-6 opacity-70" />
+              </Button>
+          </div>
         </div>
       </div>
       
@@ -247,6 +261,33 @@ export default function CheckoutPage() {
         total={subtotal}
         onConfirmSale={handleConfirmSale}
       />
+
+      <Dialog open={isSuccessModalOpen} onOpenChange={(open) => { if(!open) startNextSale() }}>
+        <DialogContent className="sm:max-w-md text-center">
+            <DialogHeader>
+                <div className="mx-auto mb-4 bg-green-100 p-3 rounded-full w-fit">
+                    <CheckCircle2 className="h-12 w-12 text-green-600" />
+                </div>
+                <DialogTitle className="text-2xl text-center text-green-700">Venda Realizada!</DialogTitle>
+            </DialogHeader>
+            
+            <div className="py-6 space-y-2">
+                <p className="text-muted-foreground">A venda foi registrada e o estoque atualizado.</p>
+                {lastChange > 0 && (
+                    <div className="bg-muted p-4 rounded-lg mt-4">
+                        <p className="text-sm font-semibold text-muted-foreground uppercase">Troco</p>
+                        <p className="text-3xl font-bold text-foreground">R$ {lastChange.toFixed(2)}</p>
+                    </div>
+                )}
+            </div>
+
+            <DialogFooter className="sm:justify-center">
+                <Button onClick={startNextSale} size="lg" className="w-full bg-green-600 hover:bg-green-700">
+                    Nova Venda (Próximo Cliente)
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

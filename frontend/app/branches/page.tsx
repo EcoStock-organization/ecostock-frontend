@@ -14,6 +14,16 @@ import { Plus, Search, Building2 } from "lucide-react"
 import { coreApi } from "@/lib/api"
 import type { Branch, User } from "@/lib/types"
 
+interface BackendUser {
+  id: number
+  nome_completo: string
+  username?: string
+  email?: string
+  cargo: string
+  filial: number | null
+  ativo: boolean
+}
+
 export default function BranchesPage() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -33,8 +43,26 @@ export default function BranchesPage() {
         coreApi.get("/filiais/"),
         coreApi.get("/usuarios/") 
       ])
+
       setBranches(branchesRes.data)
-      setUsers(usersRes.data)
+
+      const roleMap: Record<string, "admin" | "manager" | "operator"> = {
+        "ADMIN": "admin",
+        "GERENTE": "manager",
+        "OPERADOR": "operator"
+      }
+
+      const mappedUsers: User[] = usersRes.data.map((u: BackendUser) => ({
+        id: u.id, 
+        name: u.nome_completo,
+        email: u.email || u.username || "email@nao.informado",
+        role: roleMap[u.cargo] || "operator",
+        branchId: u.filial,
+        isActive: u.ativo,
+      }))
+
+      setUsers(mappedUsers)
+
     } catch (error) {
       console.error("Erro ao buscar dados:", error)
       toast({

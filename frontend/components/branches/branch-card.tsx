@@ -70,13 +70,12 @@ export function BranchCard({ branch, users, onEdit, onDelete }: BranchCardProps)
 
         <div className="pt-3 border-t">
           <div className="grid grid-cols-2 gap-4 text-center">
-            {/* Estes valores viriam de um endpoint de dashboard/estatísticas da filial */}
             <div>
-              <p className="text-2xl font-bold text-primary">-</p>
+              <p className="text-2xl font-bold text-primary">{branch.total_produtos || 0}</p>
               <p className="text-xs text-muted-foreground">Produtos</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-primary">-</p>
+              <p className="text-2xl font-bold text-primary">{branch.total_vendas || 0}</p>
               <p className="text-xs text-muted-foreground">Vendas</p>
             </div>
           </div>

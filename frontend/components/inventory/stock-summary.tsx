@@ -1,53 +1,72 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { getInventoryWithProducts } from "@/lib/mock-data"
-import { Package, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react"
+import { Package, AlertTriangle, TrendingUp, TrendingDown, Loader2 } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { getBranches } from "@/services/branchService"
+import { getBranchStock } from "@/services/stock-service"
+import type { InventoryItem } from "@/lib/types"
 
 export function StockSummary() {
-  const inventoryData = getInventoryWithProducts()
+  const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
+  
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    outOfStock: 0,
+    lowStock: 0,
+    normalStock: 0,
+    totalValue: 0
+  })
 
-  const totalProducts = inventoryData.length
-  const outOfStock = inventoryData.filter((item) => item.currentStock === 0).length
-  const lowStock = inventoryData.filter(
-    (item) => item.currentStock > 0 && item.currentStock <= item.product.minStock,
-  ).length
-  const normalStock = totalProducts - outOfStock - lowStock
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        let allItems: InventoryItem[] = []
+        
+        if (user?.role === 'manager' && user.branchId) {
+             const items = await getBranchStock(user.branchId.toString())
+             allItems = items
+        } else {
+             const branches = await getBranches()
+             const activeBranches = branches.filter(b => b.esta_ativa)
+             const promises = activeBranches.map(b => getBranchStock(b.id.toString()))
+             const results = await Promise.all(promises)
+             results.forEach(items => allItems.push(...items))
+        }
 
-  const totalValue = inventoryData.reduce((sum, item) => sum + item.currentStock * item.product.unitPrice, 0)
+        const totalProducts = allItems.length
+        const outOfStock = allItems.filter(i => i.quantidade_atual === 0).length
+        const lowStock = allItems.filter(i => i.quantidade_atual > 0 && i.quantidade_atual <= i.quantidade_minima_estoque).length
+        const normalStock = totalProducts - outOfStock - lowStock
+        const totalValue = allItems.reduce((acc, i) => acc + (i.quantidade_atual * Number(i.preco_venda_atual)), 0)
+
+        setStats({ totalProducts, outOfStock, lowStock, normalStock, totalValue })
+
+      } catch (error) {
+        console.error("Erro ao carregar resumo:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (user) fetchData()
+  }, [user])
 
   const summaryCards = [
-    {
-      title: "Total de Produtos",
-      value: totalProducts,
-      icon: Package,
-      description: "Produtos cadastrados",
-    },
-    {
-      title: "Estoque Normal",
-      value: normalStock,
-      icon: TrendingUp,
-      description: "Produtos com estoque adequado",
-      color: "text-green-600",
-    },
-    {
-      title: "Estoque Baixo",
-      value: lowStock,
-      icon: AlertTriangle,
-      description: "Produtos precisando reposição",
-      color: "text-yellow-600",
-    },
-    {
-      title: "Sem Estoque",
-      value: outOfStock,
-      icon: TrendingDown,
-      description: "Produtos esgotados",
-      color: "text-red-600",
-    },
+    { title: "Total de Itens", value: stats.totalProducts, icon: Package, description: "Itens em estoque (Global)" },
+    { title: "Estoque Normal", value: stats.normalStock, icon: TrendingUp, description: "Níveis adequados", color: "text-green-600" },
+    { title: "Estoque Baixo", value: stats.lowStock, icon: AlertTriangle, description: "Abaixo do mínimo", color: "text-yellow-600" },
+    { title: "Esgotados", value: stats.outOfStock, icon: TrendingDown, description: "Sem estoque", color: "text-red-600" },
   ]
+
+  if (loading) return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary"/></div>
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card) => (
           <Card key={card.title}>
@@ -63,58 +82,51 @@ export function StockSummary() {
         ))}
       </div>
 
-      {/* Stock Distribution */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Distribuição do Estoque</CardTitle>
-          <CardDescription>Visão geral do status dos produtos</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Estoque Normal</span>
-              <span>
-                {normalStock} produtos ({((normalStock / totalProducts) * 100).toFixed(1)}%)
-              </span>
-            </div>
-            <Progress value={(normalStock / totalProducts) * 100} className="h-2" />
-          </div>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+            <CardHeader>
+            <CardTitle>Saúde do Estoque</CardTitle>
+            <CardDescription>Proporção de itens por status</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span>Normal</span>
+                        <span>{stats.normalStock} ({stats.totalProducts > 0 ? ((stats.normalStock/stats.totalProducts)*100).toFixed(0) : 0}%)</span>
+                    </div>
+                    {/* AQUI: Usamos seletor de filho direto [&>div] para pintar a barra interna do componente Progress */}
+                    <Progress value={stats.totalProducts > 0 ? (stats.normalStock/stats.totalProducts)*100 : 0} className="bg-green-100 [&>div]:bg-green-600" />
+                </div>
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span>Baixo</span>
+                        <span>{stats.lowStock} ({stats.totalProducts > 0 ? ((stats.lowStock/stats.totalProducts)*100).toFixed(0) : 0}%)</span>
+                    </div>
+                    <Progress value={stats.totalProducts > 0 ? (stats.lowStock/stats.totalProducts)*100 : 0} className="bg-yellow-100 [&>div]:bg-yellow-600"/>
+                </div>
+                <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span>Esgotado</span>
+                        <span>{stats.outOfStock} ({stats.totalProducts > 0 ? ((stats.outOfStock/stats.totalProducts)*100).toFixed(0) : 0}%)</span>
+                    </div>
+                    <Progress value={stats.totalProducts > 0 ? (stats.outOfStock/stats.totalProducts)*100 : 0} className="bg-red-100 [&>div]:bg-red-600"/>
+                </div>
+            </CardContent>
+        </Card>
 
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Estoque Baixo</span>
-              <span>
-                {lowStock} produtos ({((lowStock / totalProducts) * 100).toFixed(1)}%)
-              </span>
-            </div>
-            <Progress value={(lowStock / totalProducts) * 100} className="h-2" />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Sem Estoque</span>
-              <span>
-                {outOfStock} produtos ({((outOfStock / totalProducts) * 100).toFixed(1)}%)
-              </span>
-            </div>
-            <Progress value={(outOfStock / totalProducts) * 100} className="h-2" />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Total Value */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Valor Total do Estoque</CardTitle>
-          <CardDescription>Valor monetário dos produtos em estoque</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-foreground">
-            R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">Baseado nos preços de venda atuais</p>
-        </CardContent>
-      </Card>
+        <Card>
+            <CardHeader>
+            <CardTitle>Valor em Estoque</CardTitle>
+            <CardDescription>Estimativa baseada no preço de venda atual</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col justify-center h-full pb-10">
+                <div className="text-4xl font-bold text-foreground mb-2">
+                    R$ {stats.totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </div>
+                <p className="text-muted-foreground">Valor total acumulado em todas as filiais ativas.</p>
+            </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

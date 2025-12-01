@@ -1,0 +1,20 @@
+version: '3.9'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecostock_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_AUTH_API_URL=http://localhost:8001/api
+      - NEXT_PUBLIC_CORE_API_URL=http://localhost:8000/api
+    networks:
+      - ecostock-network
+
+networks:
+  ecostock-network:
+    external: true

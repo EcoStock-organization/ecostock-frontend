@@ -10,6 +10,8 @@ import { ProductForm } from "./product-form"
 import { Search, Plus, Edit, Trash2, Package } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { coreApi } from "@/lib/api"
+import { CategoryManager } from "./category-manager"
+import { List } from "lucide-react"
 import type { Product, Category } from "@/lib/types"
 
 export function ProductGrid() {
@@ -20,6 +22,7 @@ export function ProductGrid() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | undefined>()
 
   const { toast } = useToast()
@@ -102,7 +105,6 @@ export function ProductGrid() {
 
   return (
     <div className="space-y-6">
-      {/* Filters and Actions */}
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -113,10 +115,19 @@ export function ProductGrid() {
                 {filteredProducts.length === 1 ? "produto encontrado" : "produtos encontrados"}
               </CardDescription>
             </div>
-            <Button onClick={handleNewProduct} className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Novo Produto
-            </Button>
+            
+            <div className="flex gap-2">
+                {/* Botão de Gerenciar Categorias */}
+                <Button variant="outline" onClick={() => setIsCategoryManagerOpen(true)} className="flex items-center gap-2">
+                    <List className="h-4 w-4" />
+                    Categorias
+                </Button>
+
+                <Button onClick={handleNewProduct} className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Novo Produto
+                </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -233,7 +244,14 @@ export function ProductGrid() {
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         product={editingProduct}
-        onSave={handleSaveProduct}
+        onSave={fetchData}
+      />
+
+      {/* Modal de Categorias */}
+      <CategoryManager 
+        isOpen={isCategoryManagerOpen} 
+        onClose={() => setIsCategoryManagerOpen(false)}
+        onUpdate={fetchData} // Ao alterar categorias, recarrega a lista para atualizar os selects
       />
     </div>
   )
