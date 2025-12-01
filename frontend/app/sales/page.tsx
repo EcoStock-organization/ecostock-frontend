@@ -8,21 +8,30 @@ import { PaymentModal } from "@/components/sales/payment-modal"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Receipt, Loader2 } from "lucide-react"
+import { Loader2, ArrowRight, ShoppingCart } from "lucide-react" // Removed Receipt
+import type { ProductWithCategory, SaleItem, Branch, CartItem } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { createSale, addItemToSale, finalizeSale, removeItemFromSale, updateItemQuantityInSale } from "@/services/sales-service"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getBranches } from "@/services/branchService" 
+import { getBranches } from "@/services/branchService"
 
-import type { ProductWithCategory, SaleItem, Branch } from "@/lib/types"
-
-interface CartItemWithSaleId {
+interface CartItemWithSaleId extends CartItem {
     productId: string;
     product: ProductWithCategory;
-    quantity: number;
-    unitPrice: number;
-    subtotal: number;
     saleItemId?: number;
+    unitPrice: number;
+}
+
+interface AxiosError {
+    response?: {
+        data?: {
+            detail?: string
+        }
+    }
+}
+
+interface ProductWithStock extends ProductWithCategory {
+    estoque_display?: number;
 }
 
 export default function SalesPage() {
@@ -67,6 +76,7 @@ export default function SalesPage() {
     }
 
     setIsLoadingSale(true)
+    initializedSale.current = true 
     try {
         const sale = await createSale(selectedBranchId)
         setCurrentSaleId(sale.id)
@@ -86,11 +96,23 @@ export default function SalesPage() {
       }
       setCartItems([])
       setCurrentSaleId(null)
-      initializedSale.current = false
       setSelectedBranchId(newBranchId)
   }
   
   const addToCart = async (product: ProductWithCategory, quantity: number) => {
+    const productWithStock = product as ProductWithStock
+    const maxStock = productWithStock.estoque_display || 0
+    const currentInCart = cartItems.find(i => i.productId === product.id.toString())?.quantity || 0
+    
+    if (maxStock > 0 && (currentInCart + quantity > maxStock)) {
+        toast({ 
+            title: "Limite de Estoque", 
+            description: `Você só possui ${maxStock} unidades deste item.`, 
+            variant: "destructive" 
+        })
+        return
+    }
+
     const saleId = await getOrCreateSaleId();
     if (!saleId) return;
 
@@ -117,9 +139,11 @@ export default function SalesPage() {
                 saleItemId: itemVenda.id
             }]
         })
+        
         toast({ title: "Adicionado", description: `${product.nome}` })
-    } catch (err: any) {
-        const msg = err.response?.data?.detail || "Erro ao adicionar item."
+    } catch (err: unknown) {
+        const error = err as AxiosError
+        const msg = error.response?.data?.detail || "Erro ao adicionar item."
         toast({ title: "Erro", description: msg, variant: "destructive" })
     }
   }
@@ -127,6 +151,18 @@ export default function SalesPage() {
   const updateQuantity = async (productId: string, quantity: number) => {
     const currentItem = cartItems.find(item => String(item.product.id) === String(productId))
     if (!currentItem || !currentSaleId || !currentItem.saleItemId) return
+
+    const productWithStock = currentItem.product as ProductWithStock
+    const maxStock = productWithStock.estoque_display || 9999
+
+    if (quantity > maxStock) {
+        toast({ 
+            title: "Limite de Estoque", 
+            description: `Estoque máximo: ${maxStock}`, 
+            variant: "destructive" 
+        })
+        return
+    }
 
     if (quantity === 0) {
         removeItem(productId)
@@ -138,19 +174,15 @@ export default function SalesPage() {
 
         setCartItems(prev => prev.map(item => {
             if (String(item.product.id) === String(productId)) {
-                return {
-                    ...item,
-                    quantity,
-                    subtotal: quantity * item.unitPrice
-                }
+                return { ...item, quantity, subtotal: quantity * item.unitPrice }
             }
             return item
         }))
     } catch (err: unknown) {
-        const error = err as { response?: { data?: { detail?: string } } }
+        const error = err as AxiosError
         toast({ 
             title: "Erro", 
-            description: error.response?.data?.detail || "Não foi possível ajustar a quantidade.", 
+            description: error.response?.data?.detail || "Não foi possível ajustar.", 
             variant: "destructive" 
         })
     }
@@ -158,27 +190,28 @@ export default function SalesPage() {
 
   const removeItem = async (productId: string) => {
     const itemToRemove = cartItems.find(item => String(item.product.id) === String(productId))
-    
-    if (!itemToRemove || !currentSaleId || !itemToRemove.saleItemId) {
-        setCartItems(prev => prev.filter(item => String(item.product.id) !== String(productId)))
-        return
-    }
+    if (!itemToRemove || !currentSaleId || !itemToRemove.saleItemId) return
 
     try {
         await removeItemFromSale(currentSaleId, itemToRemove.saleItemId)
-        setCartItems(prev => prev.filter(item => String(item.product.id) !== String(productId)))
+        setCartItems((prev) => prev.filter((item) => item.product.id.toString() !== String(productId)))
         toast({ title: "Removido", description: "Item removido da venda." })
     } catch (err: unknown) {
+        console.error(err)
         toast({ title: "Erro", description: "Erro ao remover item.", variant: "destructive" })
     }
   }
 
   const clearCart = () => {
-    setCartItems([])
+    if(confirm("Esvaziar carrinho?")) {
+        setCartItems([])
+    }
   }
 
   const handleConfirmSale = async (paymentMethod: string, amountPaid?: number) => {
     if (!currentSaleId) return
+    
+    const _ = amountPaid 
 
     try {
         const methodMap: Record<string, string> = { cash: "DINHEIRO", card: "CARTAO", pix: "PIX" }
@@ -188,100 +221,109 @@ export default function SalesPage() {
         
         toast({
             title: "Venda Finalizada!",
-            description: `Venda #${currentSaleId} concluída. Estoque baixado.`,
+            description: `Venda concluída com sucesso.`,
             variant: "success"
         })
 
         setCartItems([])
         setCurrentSaleId(null)
-        initializedSale.current = false 
         setIsPaymentModal(false)
 
     } catch (err: unknown) {
-        const error = err as { response?: { data?: { detail?: string } } }
+        const error = err as AxiosError
         toast({ 
             title: "Erro ao finalizar", 
-            description: error.response?.data?.detail || "Tente novamente. Baixa de estoque pode ter falhado.", 
+            description: error.response?.data?.detail || "Erro na baixa de estoque.", 
             variant: "destructive" 
         })
     }
   }
 
   const total = cartItems.reduce((sum, item) => sum + item.subtotal, 0)
-
+  
   if (isLoadingSale && !currentSaleId) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Iniciando Venda...</p>
-      </div>
-    )
+      return (
+        <div className="flex h-screen items-center justify-center bg-background">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-muted-foreground">Iniciando Venda...</p>
+        </div>
+      )
   }
 
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-foreground">Sistema de Vendas</h1>
-          <p className="text-muted-foreground">
-             {currentSaleId ? `Venda #${currentSaleId}` : "Aguardando início..."} 
-             {selectedBranchId && ` | Filial ${branches.find(b => b.id.toString() === selectedBranchId)?.nome || selectedBranchId}`}
-          </p>
-        </div>
+        <div className="flex justify-between items-end">
+            <div className="space-y-2">
+                <h1 className="text-3xl font-bold text-foreground">Gestão de Vendas</h1>
+                <div className="flex items-center gap-3 text-lg text-muted-foreground">
+                    <span className="font-medium text-foreground/80">
+                        {selectedBranchId
+                            ? `Filial ${branches.find(b => b.id.toString() === selectedBranchId)?.nome || ''}`
+                            : "Selecione uma filial para iniciar"}
+                    </span>
 
-        {/* Seletor para Admin */}
-        {user?.role === 'admin' && (
-            <div className="w-full max-w-xs mb-4">
-                <Select value={selectedBranchId} onValueChange={handleBranchChange}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Selecione a Filial para Vender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {branches.map(b => (
-                            <SelectItem key={b.id} value={b.id.toString()}>
-                                {b.nome} {b.esta_ativa ? '' : '(Inativa)'}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                    {currentSaleId && (
+                        <span className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide bg-green-100 text-green-700 animate-pulse">
+                           <ShoppingCart className="w-3 h-3" /> Venda em Andamento
+                        </span>
+                    )}
+                </div>
             </div>
-        )}
+
+            {user?.role === 'admin' && (
+                <div className="w-64">
+                    <Select value={selectedBranchId} onValueChange={handleBranchChange}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Selecione a Filial" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {branches.map(b => (
+                                <SelectItem key={b.id} value={b.id.toString()}>
+                                    {b.nome} {b.esta_ativa ? '' : '(Inativa)'}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+        </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
-            <Card>
+            <Card className="h-full flex flex-col">
               <CardHeader>
-                <CardTitle>Buscar Produtos</CardTitle>
+                <CardTitle>Catálogo de Produtos</CardTitle>
               </CardHeader>
-              <CardContent>
-                {/* ProductSearch modificado para receber cartItems deve estar no outro arquivo, mas a chamada aqui está correta */}
+              <CardContent className="flex-1">
                 <ProductSearch 
-                    branchId={selectedBranchId} // Usa o ID selecionado
-                    cartItems={cartItems}
+                    branchId={selectedBranchId} 
+                    cartItems={cartItems} 
                     onAddToCart={addToCart} 
                 />
               </CardContent>
             </Card>
           </div>
 
-          <div className="space-y-6">
-            <ShoppingCartComponent
-              items={cartItems}
-              onUpdateQuantity={(id, qtd) => updateQuantity(id, qtd)} 
-              onRemoveItem={(id) => removeItem(id)}
-              onClearCart={clearCart}
-            />
+          <div className="space-y-6 flex flex-col">
+            <div className="flex-1">
+                <ShoppingCartComponent
+                items={cartItems}
+                onUpdateQuantity={(id, qtd) => updateQuantity(id, qtd)} 
+                onRemoveItem={(id) => removeItem(id)}
+                onClearCart={clearCart}
+                />
+            </div>
 
-            {cartItems.length > 0 && (
-              <Card>
-                <CardContent className="pt-6">
-                  <Button onClick={() => setIsPaymentModal(true)} className="w-full h-12 text-lg" size="lg">
-                    <Receipt className="h-5 w-5 mr-2" />
-                    Finalizar Venda - R$ {total.toFixed(2)}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            <Button 
+                onClick={() => setIsPaymentModal(true)} 
+                className="w-full h-16 shadow-lg bg-green-600 hover:bg-green-700 text-white relative" 
+                size="lg"
+                disabled={cartItems.length === 0}
+            >
+                <span className="text-xl font-bold tracking-wide">FINALIZAR VENDA</span>
+                <ArrowRight className="absolute right-6 h-6 w-6 opacity-70" />
+            </Button>
           </div>
         </div>
 

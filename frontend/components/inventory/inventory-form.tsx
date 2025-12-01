@@ -2,14 +2,22 @@
 
 import React, { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { Trash2 } from "lucide-react"
 import { coreApi } from "@/lib/api"
 import type { InventoryItem, Product } from "@/lib/types"
+
+interface ApiError {
+    response?: {
+        data?: {
+            non_field_errors?: string[]
+        }
+    }
+}
 
 interface InventoryFormProps {
   isOpen: boolean
@@ -17,9 +25,10 @@ interface InventoryFormProps {
   item?: InventoryItem
   branchId: string
   onSave: () => void
+  onDelete?: (itemId: number) => void
 }
 
-export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: InventoryFormProps) {
+export function InventoryForm({ isOpen, onClose, item, branchId, onSave, onDelete }: InventoryFormProps) {
   const { toast } = useToast()
   const [products, setProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -59,6 +68,20 @@ export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: Inven
     e.preventDefault()
     setIsLoading(true)
 
+    if (
+        Number(formData.quantidade_atual) < 0 || 
+        Number(formData.quantidade_minima_estoque) < 0 || 
+        Number(formData.preco_venda_atual) < 0
+    ) {
+        toast({ 
+            title: "Valores Inválidos", 
+            description: "Quantidade e Preço não podem ser negativos.", 
+            variant: "destructive" 
+        })
+        setIsLoading(false)
+        return
+    }
+
     try {
       const payload = {
         produto_id: Number(formData.produto_id),
@@ -76,13 +99,21 @@ export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: Inven
       }
       onSave()
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error)
-      const msg = error.response?.data?.non_field_errors?.[0] || "Erro ao salvar. Verifique se o produto já existe nesta filial."
+      const apiError = error as ApiError
+      const msg = apiError.response?.data?.non_field_errors?.[0] || "Erro ao salvar. Verifique se o produto já existe nesta filial."
       toast({ title: "Erro", description: msg, variant: "destructive" })
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleDeleteClick = () => {
+      if (item && onDelete) {
+          onDelete(item.id)
+          onClose()
+      }
   }
 
   return (
@@ -120,14 +151,16 @@ export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: Inven
                     <Label>Qtd. Atual</Label>
                     <Input 
                         type="number" 
+                        min="0"
                         value={formData.quantidade_atual} 
                         onChange={e => setFormData({...formData, quantidade_atual: e.target.value})}
                     />
                 </div>
                 <div>
                     <Label>Estoque Mínimo</Label>
-                     <Input 
+                    <Input 
                         type="number" 
+                        min="0"
                         value={formData.quantidade_minima_estoque} 
                         onChange={e => setFormData({...formData, quantidade_minima_estoque: e.target.value})}
                     />
@@ -137,15 +170,33 @@ export function InventoryForm({ isOpen, onClose, item, branchId, onSave }: Inven
             <div>
                 <Label>Preço de Venda (R$)</Label>
                 <Input 
-                    type="number" step="0.01"
+                    type="number" 
+                    step="0.01"
+                    min="0"
                     value={formData.preco_venda_atual} 
                     onChange={e => setFormData({...formData, preco_venda_atual: e.target.value})}
                 />
             </div>
 
-            <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" type="button" onClick={onClose}>Cancelar</Button>
-                <Button type="submit" disabled={isLoading}>Salvar</Button>
+            <div className="flex justify-between items-center mt-6">
+                {item && onDelete ? (
+                    <Button 
+                        type="button" 
+                        variant="destructive" 
+                        size="icon"
+                        onClick={handleDeleteClick}
+                        title="Remover produto do estoque"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                ) : (
+                    <div></div>
+                )}
+
+                <div className="flex gap-2">
+                    <Button variant="outline" type="button" onClick={onClose}>Cancelar</Button>
+                    <Button type="submit" disabled={isLoading}>Salvar</Button>
+                </div>
             </div>
         </form>
       </DialogContent>

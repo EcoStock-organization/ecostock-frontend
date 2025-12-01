@@ -239,6 +239,7 @@ export function InventoryTable() {
         onSave={fetchInventory}
         branchId={selectedBranchId}
         item={editingItem}
+        onDelete={handleDelete}
       />
     </div>
   )

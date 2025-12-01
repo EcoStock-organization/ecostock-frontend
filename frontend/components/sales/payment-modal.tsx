@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { CreditCard, Banknote, Smartphone, Check } from "lucide-react"
-import type { CartItem } from "./shopping-cart"
+import type { CartItem } from "@/lib/types"
 
 interface PaymentModalProps {
   isOpen: boolean
@@ -78,7 +78,7 @@ export function PaymentModal({ isOpen, onClose, items, total, onConfirmSale }: P
                 {items.map((item) => (
                   <div key={item.product.id} className="flex justify-between text-sm">
                     <span>
-                      {item.quantity}x {item.product.name}
+                      {item.quantity}x {item.product.nome}
                     </span>
                     <span>R$ {item.subtotal.toFixed(2)}</span>
                   </div>

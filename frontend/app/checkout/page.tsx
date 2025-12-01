@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { CheckCircle2, ShoppingCart, ArrowRight } from "lucide-react"
+import { Loader2, CheckCircle2, ShoppingCart, ArrowRight } from "lucide-react"
 import type { CartItem, Branch, SaleItem, ProductWithCategory } from "@/lib/types"
 import { createSale, addItemToSale, finalizeSale, removeItemFromSale, updateItemQuantityInSale } from "@/services/sales-service"
 import { getBranches } from "@/services/branchService"
@@ -21,6 +21,10 @@ interface CartItemWithSaleId extends CartItem {
     product: ProductWithCategory;
     saleItemId?: number;
     unitPrice: number;
+}
+
+interface ProductWithStock extends ProductWithCategory {
+    estoque_display?: number;
 }
 
 interface ApiError {
@@ -84,6 +88,19 @@ export default function CheckoutPage() {
   }
 
   const addToCart = async (product: ProductWithCategory, quantity = 1) => {
+    const productWithStock = product as ProductWithStock
+    const maxStock = productWithStock.estoque_display || 0
+    const currentInCart = cartItems.find(i => i.productId === product.id.toString())?.quantity || 0
+    
+    if (currentInCart + quantity > maxStock) {
+        toast({ 
+            title: "Limite de Estoque", 
+            description: `Você só possui ${maxStock} unidades deste item.`, 
+            variant: "destructive" 
+        })
+        return
+    }
+
     const saleId = await getOrCreateSaleId();
     if (!saleId) return;
 
@@ -117,6 +134,53 @@ export default function CheckoutPage() {
       const error = err as ApiError
       const msg = error.response?.data?.detail || "Erro ao adicionar item."
       toast({ title: "Erro", description: msg, variant: "destructive" })
+    }
+  }
+
+  const updateQuantity = async (productId: string, newQuantity: number) => {
+    if (newQuantity < 0) return
+    const currentItem = cartItems.find(item => item.productId === productId)
+    if (!currentItem || !currentSaleId || !currentItem.saleItemId) return
+
+    const productWithStock = currentItem.product as ProductWithStock
+    const maxStock = productWithStock.estoque_display || 9999
+    if (newQuantity > maxStock) {
+        toast({ 
+            title: "Limite de Estoque", 
+            description: `Estoque máximo disponível: ${maxStock}`, 
+            variant: "destructive" 
+        })
+        return
+    }
+
+    if (newQuantity === 0) {
+        removeItem(productId)
+        return
+    }
+
+    try {
+        await updateItemQuantityInSale(currentSaleId, currentItem.saleItemId, newQuantity)
+        setCartItems(prev => prev.map(item => 
+          item.productId === productId 
+            ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.unitPrice }
+            : item
+        ))
+    } catch (err: unknown) {
+        const error = err as ApiError
+        toast({ title: "Estoque insuficiente", description: error.response?.data?.detail, variant: "destructive" })
+    }
+  }
+
+  const removeItem = async (productId: string) => {
+    const itemToRemove = cartItems.find(item => item.productId === productId)
+    if (!itemToRemove || !currentSaleId || !itemToRemove.saleItemId) return
+
+    try {
+      await removeItemFromSale(currentSaleId, itemToRemove.saleItemId)
+      setCartItems((prev) => prev.filter((item) => item.productId !== productId))
+    } catch (err: unknown) {
+        const _ = err
+        toast({ title: "Erro", description: "Não foi possível remover.", variant: "destructive" })
     }
   }
 
@@ -156,62 +220,34 @@ export default function CheckoutPage() {
       setCurrentSaleId(null)
       setLastChange(0)
   }
-  
-  const updateQuantity = async (productId: string, newQuantity: number) => {
-    if (newQuantity < 0) return
-    const currentItem = cartItems.find(item => item.productId === productId)
-    if (!currentItem || !currentSaleId || !currentItem.saleItemId) return
-
-    if (newQuantity === 0) {
-        removeItem(productId)
-        return
-    }
-
-    try {
-        await updateItemQuantityInSale(currentSaleId, currentItem.saleItemId, newQuantity)
-        setCartItems(prev => prev.map(item => 
-          item.productId === productId 
-            ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.unitPrice }
-            : item
-        ))
-    } catch (err: unknown) {
-        const error = err as ApiError
-        toast({ title: "Estoque insuficiente", description: error.response?.data?.detail, variant: "destructive" })
-    }
-  }
-
-  const removeItem = async (productId: string) => {
-    const itemToRemove = cartItems.find(item => item.productId === productId)
-    if (!itemToRemove || !currentSaleId || !itemToRemove.saleItemId) return
-
-    try {
-      await removeItemFromSale(currentSaleId, itemToRemove.saleItemId)
-      setCartItems((prev) => prev.filter((item) => item.productId !== productId))
-    } catch (err: unknown) {
-        console.error(err);
-        toast({ title: "Erro", description: "Não foi possível remover.", variant: "destructive" })
-    }
-  }
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0)
   
-  if (!user) return null;
+  if (!user || isLoadingSale && !currentSaleId) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-muted">
+        <div className="text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Iniciando caixa...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-hidden">
       <CheckoutHeader user={user} branch={currentBranch || undefined} />
 
       <div className="flex-1 flex overflow-hidden p-4 gap-4">
-        {/* Lado Esquerdo: Busca e Lista */}
         <div className="w-3/5 flex flex-col gap-4 overflow-y-auto pr-2">
           <Card className="border-l-4 border-l-primary shadow-sm">
             <CardContent className="pt-6 pb-6 flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-foreground">
-                        {currentSaleId ? `Venda #${currentSaleId}` : "Caixa Livre"}
+                        {currentSaleId ? "Venda em Curso" : "Caixa Livre"}
                     </h2>
                     <p className="text-muted-foreground">
-                        {currentSaleId ? "Venda em andamento" : "Adicione um produto para iniciar"}
+                        {currentSaleId ? "Adicione mais itens ou finalize" : "Inicie uma nova venda"}
                     </p>
                 </div>
                 <ShoppingCart className={`h-8 w-8 ${currentSaleId ? "text-primary" : "text-muted"} opacity-20`} />
@@ -225,7 +261,6 @@ export default function CheckoutPage() {
           />
         </div>
 
-        {/* Lado Direito: Resumo e Pagamento */}
         <div className="w-2/5 flex flex-col">
           <div className="flex-1 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
               <CartSummary
@@ -240,16 +275,15 @@ export default function CheckoutPage() {
           </div>
           
           <div className="mt-4">
-              <Button 
+             <Button 
                 className="w-full h-16 shadow-lg bg-green-600 hover:bg-green-700 text-white relative" 
                 size="lg"
                 disabled={cartItems.length === 0}
                 onClick={() => setIsPaymentModalOpen(true)}
-              >
+             >
                 <span className="text-xl font-bold tracking-wide">FINALIZAR VENDA</span>
-                
                 <ArrowRight className="absolute right-6 h-6 w-6 opacity-70" />
-              </Button>
+             </Button>
           </div>
         </div>
       </div>
