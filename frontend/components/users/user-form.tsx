@@ -135,57 +135,51 @@ export function UserForm({ isOpen, onClose, user, onSave }: UserFormProps) {
     e.preventDefault()
     setIsLoading(true)
 
-    if (!formData.name.trim() || !formData.email.trim()) {
-        toast({ title: "Atenção", description: "Preencha nome e e-mail.", variant: "destructive" })
-        setIsLoading(false)
-        return
-    }
-
     if (!user && !formData.password) {
         toast({ title: "Atenção", description: "Senha é obrigatória para novos usuários.", variant: "destructive" })
         setIsLoading(false)
         return
     }
 
-    if (formData.role === "operator" && !formData.branchId) {
-        toast({ title: "Atenção", description: "Operadores de caixa precisam estar vinculados a uma filial.", variant: "destructive" })
-        setIsLoading(false)
-        return
-    }
-
-    if (!user && (!formData.cpf || !formData.cpf.trim())) {
-        toast({ title: "Atenção", description: "CPF é obrigatório.", variant: "destructive" })
-        setIsLoading(false)
-        return
+    if (formData.role !== "admin" && !formData.branchId) {
+         if (formData.role === 'operator') {
+             toast({ title: "Atenção", description: "Operadores precisam de filial.", variant: "destructive" })
+             setIsLoading(false)
+             return
+         }
     }
 
     try {
-      const payload: UserPayload = {
+      const payload: Partial<UserPayload> = {
         nome_completo: formData.name.trim(),
         email: formData.email.trim(),
         cargo: roleMapping[formData.role],
         filial: formData.branchId ? Number(formData.branchId) : null,
-        ativo: true,
+      }
+      
+      if (!user) {
+          payload.ativo = true
+          payload.cpf = formData.cpf ? formData.cpf.replace(/\D/g, "") : null
+          payload.username = formData.email.trim()
+          payload.password = formData.password
+      } else {
+          // Edição: Campos opcionais
+          if (formData.password.trim()) {
+              payload.password = formData.password
+          }
+          payload.username = formData.email.trim()
       }
 
       if (!user) {
-        payload.cpf = formData.cpf ? formData.cpf.replace(/\D/g, "") : null
-        payload.password = formData.password
-        payload.username = formData.email.trim()
-        
-        await criarUsuario(payload)
+        await criarUsuario(payload as UserPayload)
         toast({ title: "Sucesso", description: "Usuário criado com sucesso.", variant: "success" })
       } else {
-        if (formData.password && formData.password.trim().length > 0) {
-          payload.password = formData.password
-        }
-        await atualizarUsuario(user.id, payload)
+        await atualizarUsuario(user.id, payload as UserPayload)
         toast({ title: "Sucesso", description: "Usuário atualizado.", variant: "success" })
       }
-
       onSave()
       onClose()
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Erro ao salvar usuário:", err)
       const msg = extractErrorMessage(err)
       toast({
